@@ -1,995 +1,970 @@
-# Domain Pitfalls: CalDAV/CardDAV MCP Server
+# Domain Pitfalls: CalDAV/CardDAV Write Operations (v2)
 
-**Domain:** CalDAV/CardDAV MCP server integration
+**Domain:** Adding write operations to an existing read-only CalDAV/CardDAV MCP server
 **Researched:** 2026-01-27
 **Overall confidence:** HIGH
+**Scope:** Pitfalls specific to PUT/DELETE operations, ETag conflict detection, iCalendar/vCard generation, cache invalidation, free/busy queries, and SabreDAV server quirks
 
-This document catalogs domain-specific pitfalls when building a TypeScript MCP server for CalDAV/CardDAV. Each pitfall includes warning signs, prevention strategies, and phase mapping guidance.
+This document focuses exclusively on pitfalls when **adding write operations** to an existing read-only system. For v1 read-only pitfalls (stdout contamination, XML namespaces, timezone handling, etc.), see the v1 archive.
 
 ---
 
 ## Critical Pitfalls
 
-These mistakes cause rewrites, data loss, or protocol violations.
-
-### Pitfall 1: stdout Contamination in MCP stdio Transport
-
-**What goes wrong:** Any `console.log()`, `print()`, or debug output to stdout corrupts the JSON-RPC message stream. MCP clients parse newline-delimited JSON-RPC messages from stdout. Mixing protocol messages with logs causes "malformed message" errors and communication breakdown.
-
-**Why it happens:** Developers instinctively add `console.log()` for debugging. In MCP stdio transport, stdout is reserved exclusively for protocol messages.
-
-**Consequences:**
-- MCP client cannot parse messages
-- Server appears broken despite working logic
-- Silent failures or timeout after 60 seconds
-- Difficult to debug (the logging itself breaks the protocol)
-
-**Warning signs:**
-- "Malformed message" errors from MCP client
-- Server that worked suddenly fails after adding logging
-- Client complains about invalid JSON in message stream
-- Silent timeout failures with no visible errors
-
-**Prevention:**
-```typescript
-// WRONG - breaks MCP stdio protocol
-console.log("Processing calendar query...");
-
-// RIGHT - logs go to stderr
-console.error("Processing calendar query...");
-
-// BETTER - use proper logging library configured for stderr
-import { createLogger } from 'some-logger';
-const logger = createLogger({ stream: process.stderr });
-logger.info("Processing calendar query...");
-```
-
-**Additional measures:**
-- Configure TypeScript linter to detect `console.log()` calls
-- Redirect all logs to stderr or dedicated log file
-- Flush stdout after each JSON-RPC message to prevent buffering issues
-- Test with actual MCP client (Claude Desktop) early, not just unit tests
-
-**Phase mapping:** Address in Phase 1 (MCP server bootstrap). This breaks the entire protocol.
-
-**Sources:**
-- [MCP STDIO Transport Documentation](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
-- [NearForm: Implementing MCP - Tips, Tricks and Pitfalls](https://nearform.com/digital-community/implementing-model-context-protocol-mcp-tips-tricks-and-pitfalls/)
-- [GitHub Issue: MCP server stdio mode corrupted by stdout log messages](https://github.com/ruvnet/claude-flow/issues/835)
+These mistakes cause data loss, corruption, or silent overwrites. They must be addressed before shipping any write tool.
 
 ---
 
-### Pitfall 2: Data Loss from Lossy vCard Mapping
+### Pitfall 1: Data Loss from Lossy Round-Trip (Parse-Modify-Serialize)
 
-**What goes wrong:** Mapping vCard properties to simplified TypeScript models destroys data when round-tripping. Users embed custom, non-standard properties in contacts. A `GET` that retrieves 30 properties, maps to 5 model fields, then `PUT`s back only those 5 properties permanently deletes the other 25.
+**What goes wrong:** The write tool creates a new iCalendar/vCard object from scratch using only the DTO fields (summary, start, end, etc.) instead of modifying the original `_raw` text. This strips all properties the DTO does not model: VALARM (alarms), X-properties (client sync markers), ATTENDEE parameters (RSVP status, role, SCHEDULE-STATUS), CATEGORIES, ATTACH, and custom extensions.
 
-**Why it happens:** vCard appears simple ("just name, email, phone"), but supports hundreds of properties, custom extensions, property groups, parameters, and encoding variations. Developers create clean TypeScript interfaces that don't preserve unknown properties.
+**Why it happens:** The existing DTOs (`EventDTO`, `ContactDTO`) map only ~10 properties each. A developer building an update tool might construct a new VEVENT from DTO fields rather than parsing `_raw` and modifying in-place.
 
 **Consequences:**
-- Permanent data loss for user-created custom fields
-- Sync conflicts with other CardDAV clients (they see data deletion)
-- Angry users whose carefully maintained contact details vanish
-- Violates CardDAV best practices (SabreDAV docs explicitly warn against this)
+- User alarms silently disappear after any edit
+- Attendee RSVP status and scheduling metadata stripped
+- X-APPLE-STRUCTURED-LOCATION, X-EVOLUTION-ALARM, X-MOZ-GENERATION and other client-specific extensions lost
+- Other CalDAV clients (Thunderbird, Apple Calendar, DAVx5) see data deletion, triggering sync conflicts
+- Organizational properties (CATEGORIES, ATTACH, CONFERENCE) vanish
 
 **Warning signs:**
-- Simplified contact models with 5-10 properties when vCard supports 50+
-- No mechanism to preserve unknown/unmapped properties
-- PUT requests contain fewer fields than GET responses
-- Users report "missing fields" after sync
+- PUT request body is significantly shorter than the original GET body
+- `new ICAL.Component('vcalendar')` appears in update code (building from scratch)
+- Tests that only check "summary updated" without checking "alarm preserved"
 
 **Prevention:**
+
 ```typescript
-// WRONG - lossy mapping
-interface Contact {
-  name: string;
-  email: string;
-  phone: string;
+// WRONG: Build from scratch
+function updateEvent(dto: EventDTO, changes: { summary: string }) {
+  const comp = new ICAL.Component(['vcalendar', [], []]);
+  const vevent = new ICAL.Component('vevent');
+  vevent.addPropertyWithValue('uid', dto.uid);
+  vevent.addPropertyWithValue('summary', changes.summary);
+  // ... EVERYTHING ELSE IS LOST
+  comp.addSubcomponent(vevent);
+  return comp.toString();
 }
 
-function parseVCard(vcardText: string): Contact {
-  // Parse, extract 3 fields, discard everything else
-  return { name, email, phone };
-}
+// RIGHT: Parse _raw, modify in-place, re-serialize
+function updateEvent(dto: EventDTO, changes: { summary?: string }) {
+  const jcal = ICAL.parse(dto._raw);
+  const comp = new ICAL.Component(jcal);
+  const vevent = comp.getFirstSubcomponent('vevent');
 
-// RIGHT - preserve original + map selectively
-interface Contact {
-  // Parsed fields for MCP tools
-  name: string;
-  email: string;
-  phone: string;
+  if (changes.summary) {
+    vevent.updatePropertyWithValue('summary', changes.summary);
+  }
 
-  // Preserve complete original
-  _raw: string; // Complete vCard text
-}
+  // Update DTSTAMP to indicate modification
+  vevent.updatePropertyWithValue('dtstamp', ICAL.Time.now());
 
-function parseVCard(vcardText: string): Contact {
-  const parsed = vobjectLibrary.parse(vcardText);
-  return {
-    name: parsed.getProperty('FN').value,
-    email: parsed.getProperty('EMAIL')?.value || '',
-    phone: parsed.getProperty('TEL')?.value || '',
-    _raw: vcardText // Preserve everything
-  };
-}
+  // SEQUENCE must be incremented for scheduling
+  const seq = vevent.getFirstPropertyValue('sequence') || 0;
+  vevent.updatePropertyWithValue('sequence', seq + 1);
 
-// For v2 write operations:
-function updateVCard(contact: Contact, changes: Partial<Contact>): string {
-  const vcard = vobjectLibrary.parse(contact._raw);
-  if (changes.name) vcard.setProperty('FN', changes.name);
-  if (changes.email) vcard.setProperty('EMAIL', changes.email);
-  return vcard.serialize();
+  return comp.toString(); // All original properties preserved
 }
 ```
 
-**Additional measures:**
-- For v1 (read-only): Store `_raw` field but never use it (foundation for v2)
-- Use established parsing library (sabre/vobject, ez-vcard, ical.js) - don't roll your own
-- Document that v2 write operations MUST preserve unknown properties
-- Flag this as blocker for v2 roadmap planning
+**Detection:** Unit test that creates a rich event (with VALARM, X-properties, ATTENDEE, CATEGORIES), runs it through update, and asserts all non-modified properties survive.
 
-**Phase mapping:**
-- Phase 2 (CardDAV contact queries): Store raw vCard text
-- Phase X (v2 write operations): Implement update-in-place logic
+**Phase mapping:** Must be the foundational pattern for ALL write operations. Address in the very first write-operation task. The existing `_raw` field on DTOs was designed precisely for this.
 
-**Sources:**
-- [SabreDAV: Building a CardDAV Client](https://sabre.io/dav/building-a-carddav-client/)
-- [SabreDAV: vObject Usage Instructions](https://sabre.io/vobject/vcard/)
+**Confidence:** HIGH -- SabreDAV official client guide explicitly warns: "It is important that when you GET and later on PUT an updated iCalendar object, any non-standard properties you may not have built-in support for gets retained." (https://sabre.io/dav/building-a-caldav-client/)
 
 ---
 
-### Pitfall 3: Data Loss from Lossy iCalendar Mapping
+### Pitfall 2: ETag Mismatch Causes 412 Precondition Failed
 
-**What goes wrong:** Same issue as Pitfall 2, but for calendar events. iCalendar objects contain custom properties, alarms, attachments, organizer metadata, and client-specific extensions. Mapping to simplified event models destroys this data.
+**What goes wrong:** The client sends `If-Match: "<stale-etag>"` on a PUT or DELETE request, but the resource was modified by another client (or the server itself) since the last fetch. The server responds with `412 Precondition Failed` and the operation silently fails or crashes.
 
-**Why it happens:** Developers model "event = title + start + end" and discard VALARM, ATTENDEE parameters, X-properties, and other "unnecessary" fields.
+**Why it happens:** Multiple causes:
+1. Another CalDAV client (Thunderbird, mobile app) modified the event between our fetch and our update
+2. The in-memory CTag cache holds stale ETags because the cache was not refreshed before the write
+3. After a previous PUT, the server did NOT return an ETag (scheduling modifications), so the cached ETag is from the prior GET
+4. ETag quoting issues: HTTP spec requires ETags be double-quoted (`"abc"`) but some servers return unquoted values
 
 **Consequences:**
-- User-configured alarms disappear
-- Attendee metadata (RSVP status, role) lost
-- Recurring event patterns corrupted
-- Non-standard properties (client sync markers, etc.) stripped
-- Sync conflicts with other CalDAV clients
+- Write operations fail intermittently and unpredictably
+- Users see "failed to update event" with no actionable recovery
+- If the error is silently swallowed, the user thinks the write succeeded but data is unchanged
 
 **Warning signs:**
-- Simplified event models with 6-8 properties
-- No VALARM preservation mechanism
-- Recurring events treated as single events
-- PUT requests contain fewer fields than GET responses
+- Intermittent 412 errors in logs
+- Writes succeed in testing (single client) but fail in production (multiple clients)
+- `etag` field on cached objects is `undefined` or empty string
 
 **Prevention:**
+
 ```typescript
-// WRONG - lossy mapping
-interface Event {
-  title: string;
-  start: Date;
-  end: Date;
-}
+// CRITICAL: Handle 412 with fetch-and-retry strategy
+async function safeUpdateCalendarObject(
+  client: DAVClientType,
+  calendarObject: DAVCalendarObject,
+  modifiedData: string,
+  logger: Logger
+): Promise<Response> {
+  // Attempt 1: Use cached ETag
+  const response = await client.updateCalendarObject({
+    calendarObject: { ...calendarObject, data: modifiedData },
+  });
 
-// RIGHT - preserve original
-interface Event {
-  uid: string;
-  title: string;
-  start: Date;
-  end: Date;
-  description?: string;
-  location?: string;
+  if (response.status === 412) {
+    logger.warn({ url: calendarObject.url }, '412 Precondition Failed - ETag stale, re-fetching');
 
-  // For recurring events
-  isRecurring: boolean;
-  rrule?: string;
+    // Re-fetch the current version from server
+    const fresh = await client.fetchCalendarObjects({
+      calendar: { url: getCollectionUrl(calendarObject.url) } as DAVCalendar,
+      objectUrls: [calendarObject.url],
+    });
 
-  // Preserve complete original
-  _raw: string; // Complete iCalendar text
+    if (fresh.length === 0) {
+      throw new Error('Event was deleted by another client');
+    }
+
+    // Return the conflict to the caller with both versions
+    // DO NOT auto-merge -- let the user decide
+    throw new ConflictError(
+      'Event was modified by another client since you last viewed it. ' +
+      'Please review the current version and try again.',
+      { currentVersion: fresh[0], attemptedChange: modifiedData }
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to update: ${response.status} ${response.statusText}`);
+  }
+
+  return response;
 }
 ```
 
-**Additional measures:**
-- Use ical.js or similar library (don't parse manually)
-- Preserve VALARM components (users care about notifications)
-- Store complete RRULE for recurring events (don't expand to instances)
-- Never change UID (breaks CalDAV sync)
-- Document write operation constraints for v2
+**Additional safeguards:**
+- ALWAYS check `response.ok` or `response.status` after tsdav write calls (they return raw `Response`, not parsed data)
+- After a successful PUT, check if the response includes an ETag header; if not, immediately re-fetch to get the current ETag
+- When the cached ETag is `undefined`, consider fetching fresh before attempting the write
 
-**Phase mapping:**
-- Phase 1 (CalDAV event queries): Store raw iCalendar text
-- Phase X (v2 write operations): Implement update-in-place logic
+**Phase mapping:** Core write infrastructure. Must be implemented before any write tool.
+
+**Confidence:** HIGH -- RFC 4791 Section 5.3.4 defines this behavior. SabreDAV GitHub issue #574 documents the ETag quoting variant. Nextcloud GitHub issue #14428 documents the If-None-Match variant.
 
 **Sources:**
 - [SabreDAV: Building a CalDAV Client](https://sabre.io/dav/building-a-caldav-client/)
+- [SabreDAV Issue #574: 412 Precondition Failed while updating contact](https://github.com/sabre-io/dav/issues/574)
+- [Nextcloud Issue #14428: ETag If-None-Match 412](https://github.com/nextcloud/server/issues/14428)
+- [RFC 4791: Calendar Object Resource Entity Tag](https://icalendar.org/CalDAV-Access-RFC-4791/5-3-4-calendar-object-resource-entity-tag.html)
 
 ---
 
-### Pitfall 4: Missing or Wrong XML Namespaces
+### Pitfall 3: Server Modifies iCalendar After PUT -- No ETag Returned
 
-**What goes wrong:** CalDAV/CardDAV responses use multiple XML namespaces (`DAV:`, `urn:ietf:params:xml:ns:caldav`, `urn:ietf:params:xml:ns:carddav`). Parsers fail with "parsererror" when namespaces are missing, wrong, or declared incorrectly.
+**What goes wrong:** After a successful PUT, the server modifies the stored iCalendar object (adding SCHEDULE-STATUS, correcting missing PRODID, normalizing data) and does NOT return an ETag in the response. The client's cached ETag is now invalid. The next update attempt uses the stale ETag and gets 412.
 
-**Why it happens:** XML namespace handling is complex. TypeScript XML libraries vary in namespace support. Developers copy-paste PROPFIND/REPORT XML from examples without understanding namespace declarations.
+**Why it happens:** Per RFC 4791: "in the case where the data stored by a server as a result of a PUT request is not equivalent by octet equality to the submitted calendar object resource, a strong entity tag MUST NOT be returned in the response." SabreDAV follows this strictly.
+
+Common triggers on SabreDAV:
+- Event has ORGANIZER + ATTENDEE: server adds `SCHEDULE-STATUS` parameters
+- Missing or incorrect PRODID: server auto-repairs and adds `X-Sabre-Ew-Gross` header
+- Validation auto-corrections in sabre/dav 3.2+
 
 **Consequences:**
-- PROPFIND requests fail with 400 Bad Request
-- XML parser throws "namespace not declared" errors
-- Server rejects calendar-query REPORT with malformed XML
-- Silent failures (parser returns null/undefined instead of throwing)
+- After a "successful" create or update, the cache holds the wrong ETag (or no ETag)
+- Subsequent updates fail with 412
+- If the client caches the data it sent rather than what the server stored, future reads return stale data
 
 **Warning signs:**
-- XML parsing errors mentioning "namespace"
-- Properties returned with `parsererror` status
-- Server returns 400 on valid-looking XML
-- Missing `xmlns:` attributes in request XML
+- `response.headers.get('etag')` returns `null` after PUT
+- `X-Sabre-Ew-Gross` header present in response (SabreDAV indicator of auto-repair)
+- Writes to events with attendees always fail on second update
 
 **Prevention:**
-```typescript
-// WRONG - missing namespace declarations
-const xml = `
-<d:propfind>
-  <d:prop>
-    <c:calendar-data/>
-  </d:prop>
-</d:propfind>`;
 
-// RIGHT - declare all namespaces
-const xml = `
-<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:prop>
-    <c:calendar-data/>
-  </d:prop>
-</d:propfind>`;
+```typescript
+async function putAndRefresh(
+  client: DAVClientType,
+  calendarObject: DAVCalendarObject,
+  logger: Logger
+): Promise<DAVCalendarObject> {
+  const response = await client.updateCalendarObject({ calendarObject });
+
+  if (!response.ok) {
+    throw new Error(`PUT failed: ${response.status}`);
+  }
+
+  const newEtag = response.headers.get('etag');
+
+  if (newEtag) {
+    // Server returned ETag: update our cached copy
+    return { ...calendarObject, etag: newEtag };
+  }
+
+  // NO ETag returned: server modified the object.
+  // MUST re-fetch to get current state + ETag.
+  logger.info({ url: calendarObject.url },
+    'No ETag in PUT response (server modified object), re-fetching');
+
+  const fresh = await client.fetchCalendarObjects({
+    calendar: { url: getCollectionUrl(calendarObject.url) } as DAVCalendar,
+    objectUrls: [calendarObject.url],
+  });
+
+  if (fresh.length === 0) {
+    throw new Error('Object disappeared after PUT');
+  }
+
+  return fresh[0];
+}
 ```
 
-**Standard namespaces:**
-- `DAV:` - WebDAV properties
-- `urn:ietf:params:xml:ns:caldav` - CalDAV properties
-- `urn:ietf:params:xml:ns:carddav` - CardDAV properties
+**Phase mapping:** Core write infrastructure, same layer as Pitfall 2.
 
-**Additional measures:**
-- Use XML builder library (e.g., xmlbuilder2) with namespace support, not string templates
-- Validate XML against CalDAV/CardDAV examples before sending
-- Check parser for null/undefined responses (indicates parse failure)
-- Test with multiple CalDAV servers (SabreDAV, Nextcloud, iCloud)
-
-**Phase mapping:** Address in Phase 1 (CalDAV client foundation). Breaks all server communication.
+**Confidence:** HIGH -- SabreDAV official docs explicitly state this behavior. SabreDAV blog post on validation changes (2016) confirms the `X-Sabre-Ew-Gross` header pattern.
 
 **Sources:**
-- [Mail Archive: CalDAV XML response not valid (missing namespace)](https://www.mail-archive.com/devel@cyrus.topicbox.com/msg00072.html)
-- [iCalendar.org: CalDAV calendar-query REPORT](https://icalendar.org/CalDAV-Access-RFC-4791/7-8-caldav-calendar-query-report.html)
+- [SabreDAV: Building a CalDAV Client](https://sabre.io/dav/building-a-caldav-client/) -- "SabreDAV gives this ETag on updates back most of the time, but not always"
+- [SabreDAV Blog: Validation changes in 3.2](https://sabre.io/blog/2016/validation-changes/)
+- [DAVx5: Technical Information](https://manual.davx5.com/technical_information.html)
 
 ---
 
-### Pitfall 5: Basic Auth Over HTTP
+### Pitfall 4: Accidental Scheduling Side-Effects (ORGANIZER/ATTENDEE)
 
-**What goes wrong:** Sending username/password via HTTP Basic Authentication over unencrypted HTTP connections exposes credentials in cleartext. Network sniffing reveals passwords instantly.
+**What goes wrong:** A write tool creates or updates an event with ORGANIZER and ATTENDEE properties. SabreDAV implements RFC 6638 CalDAV Scheduling, which means the server **automatically** sends email invitations, cancellations, or updates to all attendees -- without any explicit action by the MCP tool.
 
-**Why it happens:** Development environments use `http://localhost` or `http://dav.linagora.com`. Developers forget to enforce HTTPS in production configuration.
+**Why it happens:** RFC 6638 defines "implicit scheduling": when a calendar object resource contains ORGANIZER matching the current user and at least one ATTENDEE, the server treats it as a scheduling object and acts as the scheduling agent.
+
+Scenarios that trigger automatic scheduling:
+1. **Create with attendees:** Server sends iTIP REQUEST to all ATTENDEEs
+2. **Update rescheduling:** Changing DTSTART/DTEND/RRULE resets all PARTSTAT to NEEDS-ACTION and re-sends invitations
+3. **Delete with attendees:** Server sends iTIP CANCEL to all affected attendees
 
 **Consequences:**
-- Credentials intercepted by network attackers
-- Compliance violations (GDPR, security policies)
-- RFC 4791 explicitly warns against Basic Auth over HTTP
-- Google and other providers refuse Basic Auth without HTTPS
+- AI assistant accidentally sends meeting invitations to dozens of people
+- Deleting an event sends cancellation emails to all attendees
+- Modifying a recurring event time resets everyone's RSVP status
+- The user is horrified when colleagues receive unexpected calendar invitations
 
 **Warning signs:**
-- Configuration accepts `http://` URLs
-- No validation rejecting non-HTTPS endpoints
-- Test server URLs use HTTP
-- Documentation doesn't emphasize HTTPS requirement
+- Test events with ORGANIZER+ATTENDEE trigger real emails on the SabreDAV server
+- Server adds SCHEDULE-STATUS to stored events (Pitfall 3 symptom)
+- Users report "I just wanted to change the title, why did everyone get a re-invite?"
 
 **Prevention:**
+
 ```typescript
-// Validate server URL on startup
-function validateServerUrl(url: string): void {
-  const parsed = new URL(url);
-  if (parsed.protocol !== 'https:' && !parsed.hostname.includes('localhost')) {
-    throw new Error(
-      'CalDAV server URL must use HTTPS (except localhost for testing). ' +
-      'Basic Authentication over HTTP exposes credentials in cleartext. ' +
-      `Received: ${url}`
-    );
-  }
+// Strategy 1: Strip ATTENDEE/ORGANIZER from newly created events
+// (MCP tool creates simple events, user adds attendees via calendar app)
+function createSimpleEvent(params: CreateEventParams): string {
+  const comp = new ICAL.Component(['vcalendar', [], []]);
+  // ... build event WITHOUT ORGANIZER or ATTENDEE
+  // This prevents any scheduling side-effects
+  return comp.toString();
 }
 
-// In environment variable parsing
-const serverUrl = process.env.CALDAV_SERVER_URL;
-if (!serverUrl) throw new Error('CALDAV_SERVER_URL required');
-validateServerUrl(serverUrl);
+// Strategy 2: Use SCHEDULE-AGENT=NONE to suppress server scheduling
+// (Use when preserving existing attendees during update)
+function suppressScheduling(vevent: ICAL.Component): void {
+  const organizer = vevent.getFirstProperty('organizer');
+  if (organizer) {
+    organizer.setParameter('schedule-agent', 'NONE');
+  }
+  vevent.getAllProperties('attendee').forEach(att => {
+    att.setParameter('schedule-agent', 'NONE');
+  });
+}
+
+// Strategy 3: For updates that preserve attendees, warn the user
+// in tool description that rescheduling may send notifications
 ```
 
-**Additional measures:**
-- Document HTTPS requirement prominently in README
-- Add security warning when `http://` detected (except localhost)
-- Consider allowing override flag for testing (`ALLOW_INSECURE_HTTP=true`)
-- Document OAuth as future alternative (v2+)
+**Recommended approach for mcp-twake v2:**
+- **Create:** Do NOT set ORGANIZER or ATTENDEE in created events. Keep events simple. The user can add attendees via their calendar application.
+- **Update:** If the existing event has ORGANIZER/ATTENDEE, warn the user via the tool response that time changes will trigger re-invitations. Consider using SCHEDULE-AGENT=NONE for non-time changes (title, description updates).
+- **Delete:** If the event has ATTENDEEs, warn the user that cancellation notifications will be sent.
+- **Tool descriptions:** Explicitly tell the AI: "If modifying an event with attendees, inform the user that changing the time will send re-invitations to all attendees."
 
-**Phase mapping:** Address in Phase 1 (configuration). Critical security issue.
+**Phase mapping:** Tool design phase. Must be decided before implementing create/update event tools.
+
+**Confidence:** HIGH -- RFC 6638 is explicit. SabreDAV scheduling page confirms automatic behavior. This is the most dangerous pitfall for user trust.
 
 **Sources:**
-- [SabreDAV: Authentication](https://sabre.io/dav/authentication/)
-- [Google CalDAV API Guide](https://developers.google.com/calendar/caldav/v2/guide)
-- [RFC 4791: Calendaring Extensions to WebDAV](https://datatracker.ietf.org/doc/html/rfc4791)
+- [RFC 6638: Scheduling Extensions to CalDAV](https://datatracker.ietf.org/doc/rfc6638/)
+- [SabreDAV: CalDAV Scheduling](https://sabre.io/dav/scheduling/)
+- [RFC 6638: Avoiding Conflicts when Updating Scheduling Object Resources](https://icalendar.org/CalDAV-Scheduling-RFC-6638/3-2-10-avoiding-conflicts-when-updating-scheduling-object-resources.html)
+- [RFC 6638: Schedule Agent Parameter](https://icalendar.org/CalDAV-Scheduling-RFC-6638/7-1-schedule-agent-parameter.html)
+
+---
+
+### Pitfall 5: Cache Stale After Write -- Read Returns Old Data
+
+**What goes wrong:** After a successful PUT/DELETE, the in-memory `CollectionCache` still holds the old CTag and old objects. The next read operation returns cached stale data, making the user think their write did not work.
+
+**Why it happens:** The current `CollectionCache` uses CTag-based freshness. After a write, the server's CTag changes, but the cache still holds the old CTag. The next `isFresh()` check should detect staleness -- BUT only if the `CalendarService.fetchEvents()` path queries the server for the new CTag. If the calendar's `ctag` property in the cached `DAVCalendar[]` is also stale (from `listCalendars()` lazy cache), the check never fires.
+
+The specific chain of failure in the current codebase:
+1. `CalendarService.listCalendars()` caches calendars with CTag A
+2. User creates an event via write tool
+3. Server updates CTag to B
+4. User asks "what's on my calendar?" -- `fetchEvents()` uses cached calendar with CTag A
+5. `isFresh(url, CTag A)` returns `true` (matches cached CTag A)
+6. Stale cached objects returned -- new event missing
+
+**Consequences:**
+- User creates event, immediately asks "what's on my calendar today?" and doesn't see it
+- User deletes event, asks again, and still sees it
+- User loses trust in the MCP tool
+
+**Warning signs:**
+- "I just created an event but it doesn't show up"
+- Write returns success but subsequent reads don't reflect the change
+- Restarting the MCP server "fixes" the issue (clears all caches)
+
+**Prevention:**
+
+```typescript
+// After ANY successful write operation, invalidate affected caches
+async function invalidateAfterWrite(
+  calendarService: CalendarService,
+  calendarUrl: string,
+  logger: Logger
+): Promise<void> {
+  // 1. Invalidate the object cache for this calendar
+  calendarService.objectCache.invalidate(calendarUrl);
+
+  // 2. Force re-discovery of calendars (CTags will be refreshed)
+  await calendarService.refreshCalendars();
+
+  logger.info({ calendarUrl }, 'Cache invalidated after write operation');
+}
+```
+
+**Implementation note:** The current `CollectionCache` already has an `invalidate(url)` method and `CalendarService` has `refreshCalendars()`. The write operations just need to call them. The simplest approach: every write tool calls `invalidate()` on the specific collection URL after a successful PUT/DELETE.
+
+**Phase mapping:** Must be implemented alongside every write tool. Consider a shared `afterWrite()` helper.
+
+**Confidence:** HIGH -- Direct analysis of the existing `CalendarService`, `AddressBookService`, and `CollectionCache` code shows this exact failure path.
 
 ---
 
 ## Moderate Pitfalls
 
-These mistakes cause bugs, incorrect results, or technical debt but are fixable.
-
-### Pitfall 6: Timezone Handling in Recurring Events
-
-**What goes wrong:** Recurring events that span Daylight Saving Time (DST) transitions produce incorrect times when converted between timezones. A "9 AM daily standup" becomes "10 AM" or "8 AM" depending on DST state.
-
-**Why it happens:** iCalendar stores events in local time with `TZID` reference. VTIMEZONE components define DST rules. Expanding RRULE across DST boundary requires applying different UTC offsets to different instances.
-
-**Consequences:**
-- Recurring events show wrong times after DST transition
-- "9 AM meeting" appears at 10 AM in winter
-- User asks "what's my schedule today?" and gets wrong times
-- UNTIL rules fail if DATE-TIME format doesn't match DTSTART format
-
-**Warning signs:**
-- Recurring event times shift by 1 hour seasonally
-- Errors parsing RRULE with UNTIL parameter
-- Events without VTIMEZONE component fail to parse
-- Timezone-naive Date objects used for display
-
-**Prevention:**
-```typescript
-// Use timezone-aware library (ical.js, Luxon, date-fns-tz)
-import { DateTime } from 'luxon';
-
-// WRONG - timezone-naive
-const eventTime = new Date(event.dtstart); // Assumes local TZ
-
-// RIGHT - preserve timezone
-const eventTime = DateTime.fromISO(event.dtstart, {
-  zone: event.tzid || 'UTC'
-});
-
-// For recurring events: use library to expand RRULE
-import ICAL from 'ical.js';
-
-function expandRecurrence(event: ICALComponent): Date[] {
-  const rrule = new ICAL.Recur(event.getFirstPropertyValue('rrule'));
-  const dtstart = event.getFirstPropertyValue('dtstart');
-
-  // Library handles DST transitions automatically
-  return rrule.iterator(dtstart).next();
-}
-```
-
-**Important rules:**
-- DTSTART and UNTIL must use same value type (both local time or both UTC)
-- Floating time (no TZID) represents "same clock time in any timezone"
-- UTC times always end with 'Z'
-- VTIMEZONE component required if RRULE spans DST boundary
-
-**Additional measures:**
-- Always normalize to UTC for storage/comparison
-- Use ISO 8601 format with explicit timezone
-- Test with events spanning DST transitions (March/November)
-- Document timezone handling assumptions
-
-**Phase mapping:** Address in Phase 1 (event query implementation). Common user-visible bug.
-
-**Sources:**
-- [The Deceptively Complex World of Calendar Events and RRULEs](https://www.nylas.com/blog/calendar-events-rrules/)
-- [iCalendar.org: Recurrence Rule](https://icalendar.org/iCalendar-RFC-5545/3-8-5-3-recurrence-rule.html)
-- [CalConnect: Handling Dates and Times](https://devguide.calconnect.org/iCalendar-Topics/Handling-Dates-and-Times/)
+These cause bugs, incorrect behavior, or poor user experience but are recoverable.
 
 ---
 
-### Pitfall 7: vCard Version Incompatibilities (3.0 vs 4.0)
+### Pitfall 6: Invalid iCalendar Generation -- Missing Required Properties
 
-**What goes wrong:** vCard 3.0 and 4.0 use different encoding, property names, and parameters. Servers may return either version. Clients that assume one version fail on the other.
+**What goes wrong:** When creating a new event, the generated iCalendar object is missing required properties (PRODID, VERSION at VCALENDAR level; UID, DTSTAMP at VEVENT level). SabreDAV 3.2+ rejects these with validation errors or silently auto-repairs them (triggering Pitfall 3).
 
-**Why it happens:** vCard 4.0 changed encoding rules (UTF-8 default vs optional), property formats (TYPE=pref vs PREF=1), and dropped some properties (AGENT).
+**Why it happens:** RFC 5545 has strict requirements for which properties are REQUIRED. Developers building VEVENT objects with ical.js forget some of them.
+
+**Required iCalendar properties:**
+
+| Level | Property | Rule | Common mistake |
+|-------|----------|------|----------------|
+| VCALENDAR | PRODID | MUST appear once | Forgotten entirely |
+| VCALENDAR | VERSION | MUST be "2.0" | Forgotten entirely |
+| VEVENT | UID | MUST appear once | Generated but not UUID format |
+| VEVENT | DTSTAMP | MUST appear once | Forgotten -- ical.js does NOT auto-add it |
+| VEVENT | DTSTART | MUST appear once (when no METHOD) | Usually present but wrong format |
+| VEVENT | DTEND or DURATION | At most one, mutually exclusive | Both set, or neither set |
 
 **Consequences:**
-- Photos fail to load (different PHOTO encoding)
-- Preference parameters lost during conversion (TYPE=pref → PREF=1)
-- Character encoding corruption (3.0 allows multiple charsets, 4.0 is UTF-8 only)
-- Inline vCards (AGENT property) break in 4.0
-
-**Key differences:**
-| Aspect | vCard 3.0 | vCard 4.0 |
-|--------|-----------|-----------|
-| Encoding | Optional UTF-8, multiple charsets | Always UTF-8 |
-| Photo | `PHOTO;TYPE=JPEG;ENCODING=b:[data]` | `PHOTO:data:image/jpeg;base64,[data]` |
-| Preference | `TYPE=pref` | `PREF=1` |
-| Text encoding | Semicolon encoded (`\;`) | Semicolon not encoded |
-| AGENT property | Supported (inline vCard) | Dropped |
-
-**Warning signs:**
-- Photo fields empty despite server having images
-- Encoding errors with international names
-- "Validation error" from CardDAV server on PUT
-- TYPE=pref lost during sync
+- SabreDAV 3.2+ auto-repairs missing PRODID (adds default) and withholds ETag (Pitfall 3)
+- SabreDAV logs `X-Sabre-Ew-Gross` header as a warning to the developer
+- Older SabreDAV versions may reject the PUT entirely
+- Missing DTSTAMP violates RFC 5545; some servers accept it, others reject with 400/415
 
 **Prevention:**
+
 ```typescript
-// Use version-aware parsing library
-import vobject from 'sabre/vobject'; // Handles both versions
+function createNewEvent(params: {
+  summary: string;
+  dtstart: Date;
+  dtend: Date;
+  description?: string;
+  location?: string;
+  timezone?: string;
+}): string {
+  const comp = new ICAL.Component(['vcalendar', [], []]);
+  comp.updatePropertyWithValue('prodid', '-//mcp-twake//EN');
+  comp.updatePropertyWithValue('version', '2.0');
 
-// Or normalize to single version
-function normalizeVCard(vcardText: string): string {
-  const vcard = vobject.parse(vcardText);
+  const vevent = new ICAL.Component('vevent');
 
-  // Convert to vCard 3.0 (maximum compatibility)
-  if (vcard.version === '4.0') {
-    return vcard.convert('3.0').serialize();
+  // REQUIRED: UID (UUID v4 format per RFC 7986 recommendation)
+  vevent.updatePropertyWithValue('uid', crypto.randomUUID());
+
+  // REQUIRED: DTSTAMP (current UTC time)
+  vevent.updatePropertyWithValue('dtstamp', ICAL.Time.now());
+
+  // REQUIRED: DTSTART
+  const start = ICAL.Time.fromJSDate(params.dtstart, false);
+  if (params.timezone) {
+    start.zone = new ICAL.Timezone({ tzid: params.timezone });
+  }
+  vevent.updatePropertyWithValue('dtstart', start);
+
+  // DTEND (mutually exclusive with DURATION)
+  const end = ICAL.Time.fromJSDate(params.dtend, false);
+  if (params.timezone) {
+    end.zone = new ICAL.Timezone({ tzid: params.timezone });
+  }
+  vevent.updatePropertyWithValue('dtend', end);
+
+  // Optional properties
+  if (params.summary) vevent.updatePropertyWithValue('summary', params.summary);
+  if (params.description) vevent.updatePropertyWithValue('description', params.description);
+  if (params.location) vevent.updatePropertyWithValue('location', params.location);
+
+  comp.addSubcomponent(vevent);
+  return comp.toString();
+}
+```
+
+**Key gotcha with ical.js:** `ICAL.Time.now()` creates the current time. `ICAL.Time.fromJSDate(date, false)` preserves local time (the `false` means "not UTC"). Setting `.zone` is required for timezone-aware events. `ICAL.Time.fromJSDate(date, true)` creates UTC time.
+
+**Phase mapping:** Create-event tool implementation.
+
+**Confidence:** HIGH -- RFC 5545 Section 3.6.1 defines required VEVENT properties. SabreDAV validation blog post confirms auto-repair behavior.
+
+**Sources:**
+- [RFC 5545: Event Component](https://icalendar.org/iCalendar-RFC-5545/3-6-1-event-component.html)
+- [SabreDAV Blog: Validation changes in 3.2](https://sabre.io/blog/2016/validation-changes/)
+- [ical.js Wiki: Creating basic iCalendar](https://github.com/kewisch/ical.js/wiki/Creating-basic-iCalendar)
+
+---
+
+### Pitfall 7: Invalid vCard Generation -- FN/UID/VERSION Validation Failures
+
+**What goes wrong:** When creating a new contact, the generated vCard is missing the FN (Formatted Name) property, UID, or VERSION. SabreDAV returns `415 Unsupported Media Type` with "The FN property must appear in the VCARD component exactly 1 time."
+
+**Why it happens:** vCard 3.0 and 4.0 both require FN. Developers forget it when the user only provides a first name and last name. Or they set FN to empty string, which some servers reject.
+
+**Required vCard properties:**
+
+| Property | Rule | Common mistake |
+|----------|------|----------------|
+| VERSION | MUST be "3.0" or "4.0" | Wrong version string |
+| FN | MUST appear exactly once | Missing entirely, or empty string |
+| N | SHOULD appear (vCard 3.0 requires, 4.0 recommends) | Missing structured name |
+| UID | Required by CardDAV | Forgotten or not UUID format |
+
+**Key version differences for writes:**
+
+| Aspect | Write vCard 3.0 | Write vCard 4.0 |
+|--------|-----------------|-----------------|
+| Content-Type | `text/vcard; charset=utf-8` | `text/vcard; charset=utf-8` |
+| N property | REQUIRED | OPTIONAL (but recommended) |
+| FN property | REQUIRED | REQUIRED |
+| Line ending | CRLF required | CRLF required |
+
+**Consequences:**
+- `415 Unsupported Media Type` on PUT (SabreDAV strict validation)
+- Contact created but missing from search results (no FN to match against)
+- Duplicate UID causes `400 Bad Request: VCard object with uid already exists`
+
+**Prevention:**
+
+```typescript
+function createNewContact(params: {
+  givenName?: string;
+  familyName?: string;
+  email?: string;
+  phone?: string;
+  organization?: string;
+}): string {
+  const comp = new ICAL.Component(['vcard', [], []]);
+  comp.updatePropertyWithValue('version', '3.0'); // Maximum compatibility
+
+  // UID: required by CardDAV
+  comp.updatePropertyWithValue('uid', crypto.randomUUID());
+
+  // FN: required, exactly once. Build from available name parts.
+  const fnParts = [params.givenName, params.familyName].filter(Boolean);
+  const fn = fnParts.length > 0 ? fnParts.join(' ') : '(No name)';
+  comp.updatePropertyWithValue('fn', fn);
+
+  // N: structured name [family, given, middle, prefix, suffix]
+  const nValue = [
+    params.familyName || '',
+    params.givenName || '',
+    '', // middle
+    '', // prefix
+    '', // suffix
+  ];
+  comp.updatePropertyWithValue('n', nValue);
+
+  // Optional properties
+  if (params.email) comp.updatePropertyWithValue('email', params.email);
+  if (params.phone) comp.updatePropertyWithValue('tel', params.phone);
+  if (params.organization) comp.updatePropertyWithValue('org', params.organization);
+
+  return comp.toString();
+}
+```
+
+**Phase mapping:** Create-contact tool implementation.
+
+**Confidence:** HIGH -- Nextcloud issue #206 and Bugzilla #1373576 confirm the FN validation error. SabreDAV blog confirms strict validation in 3.2+.
+
+**Sources:**
+- [Nextcloud Issue #206: FN property must appear exactly 1 time](https://github.com/nextcloud/contacts/issues/206)
+- [Bugzilla #1373576: FN validation error](https://bugzilla.mozilla.org/show_bug.cgi?id=1373576)
+- [SabreDAV: Building a CardDAV Client](https://sabre.io/dav/building-a-carddav-client/)
+- [Nextcloud Issue #30827: VCard with uid already exists](https://github.com/nextcloud/server/issues/30827)
+
+---
+
+### Pitfall 8: UID Must Be Globally Unique and Immutable
+
+**What goes wrong:** Two scenarios: (a) Creating events/contacts with non-unique UIDs causes server rejection (`400 Bad Request: calendar object with uid already exists`). (b) Changing the UID during an update breaks CalDAV sync for all clients.
+
+**Why it happens:**
+- Using sequential counters or timestamps for UIDs (collision risk across clients)
+- Using email-style UIDs (`user@host`) that collide when the same user creates events from different tools
+- Accidentally modifying the UID during an update operation
+- Re-using UIDs from deleted events
+
+**RFC constraints:**
+- UID MUST be unique within a calendar collection (RFC 4791)
+- Calendar components with the same UID MUST be in the same calendar object resource (RFC 4791)
+- UID values SHOULD be UUID format (RFC 7986 updates RFC 5545)
+- UID MUST NOT contain security-sensitive data like hostnames or IP addresses (RFC 7986)
+
+**Consequences:**
+- `400 Bad Request` on create: "calendar object with uid already exists in this calendar collection"
+- Changed UID: other CalDAV clients lose track of the event, creating duplicates
+- Non-unique UIDs: events silently overwrite each other
+
+**Prevention:**
+
+```typescript
+// For CREATE operations: always generate fresh UUID v4
+const newUid = crypto.randomUUID(); // e.g., "5fc53010-1267-4f8e-bc28-1d7ae55a7c99"
+
+// For UPDATE operations: NEVER modify the UID
+function updateEvent(raw: string, changes: Partial<EventDTO>): string {
+  const comp = ICAL.parse(raw);
+  const vevent = new ICAL.Component(comp).getFirstSubcomponent('vevent');
+
+  // CRITICAL: Do NOT touch the UID property
+  // Only modify the properties the user wants to change
+  if (changes.summary !== undefined) {
+    vevent.updatePropertyWithValue('summary', changes.summary);
+  }
+  // ... other changes
+
+  return new ICAL.Component(comp).toString();
+}
+```
+
+**Phase mapping:** Create and update tool implementations.
+
+**Confidence:** HIGH -- RFC 4791 Section 5.3.1 and RFC 7986 Section 5.3 are explicit. Nextcloud issue #30827 documents the duplicate UID error.
+
+**Sources:**
+- [CalConnect: UID](https://devguide.calconnect.org/Data-Model/UID/)
+- [RFC 7986: UID Property](https://icalendar.org/New-Properties-for-iCalendar-RFC-7986/5-3-uid-property.html)
+- [Nextcloud Issue #30827: VCard object with uid already exists](https://github.com/nextcloud/server/issues/30827)
+- [SabreDAV Issue #1264: Calendar object with same UID](https://github.com/sabre-io/dav/issues/1264)
+
+---
+
+### Pitfall 9: URL Construction for New Resources
+
+**What goes wrong:** When creating a new event or contact, the client must construct the resource URL. tsdav's `createCalendarObject` takes a `filename` parameter and constructs `new URL(filename, calendar.url).href`. Getting the filename wrong causes 409 Conflict, 403 Forbidden, or overwrites an existing resource.
+
+**Why it happens:**
+- Using the UID directly as filename (often works but not required by spec)
+- Forgetting the `.ics` or `.vcf` extension
+- Using characters that aren't URL-safe (spaces, special chars)
+- Trailing slash issues: if `calendar.url` doesn't end with `/`, URL construction fails
+
+**SabreDAV URL behavior:**
+- Filename must end with `.ics` (CalDAV) or `.vcf` (CardDAV)
+- Filename must be unique within the collection
+- The UID and URL have NO meaningful relationship (per SabreDAV docs)
+- `new URL('event.ics', 'https://host/cal/default/')` = `https://host/cal/default/event.ics` (correct)
+- `new URL('event.ics', 'https://host/cal/default')` = `https://host/cal/event.ics` (WRONG - goes up a level)
+
+**Consequences:**
+- 409 Conflict if filename already exists (and `If-None-Match: *` is set)
+- 403 Forbidden if URL targets wrong collection
+- Silent overwrite if `If-None-Match: *` is not set (tsdav DOES set it, so this is safe)
+
+**Prevention:**
+
+```typescript
+// Safe filename generation for new resources
+function generateCalendarObjectFilename(): string {
+  return `${crypto.randomUUID()}.ics`;
+}
+
+function generateVCardFilename(): string {
+  return `${crypto.randomUUID()}.vcf`;
+}
+
+// Ensure calendar URL ends with slash before constructing
+function ensureTrailingSlash(url: string): string {
+  return url.endsWith('/') ? url : url + '/';
+}
+```
+
+**Phase mapping:** Create tool implementations.
+
+**Confidence:** HIGH -- tsdav source code confirms `new URL(filename, calendar.url).href` construction. SabreDAV docs state "all URLs ended with .ics. This is often the case, but you must not rely on this."
+
+---
+
+### Pitfall 10: Recurring Event Modification Destroys the Series
+
+**What goes wrong:** When updating a recurring event, the client sends only the modified VEVENT instance (without RRULE) to the server. The server interprets this as replacing the entire recurring series with a single non-recurring event. All recurrences vanish.
+
+**Why it happens:** The RFC behavior: saving a single recurrence instance (a VEVENT without RRULE) to the resource URL of a recurring event overwrites the full calendar object resource. The RRULE is lost.
+
+**Specific mcp-twake risk:** The project scopes v2 to "simple recurring: whole series only." But even series-level edits are dangerous if not done correctly.
+
+**What's safe vs. dangerous for series-level edits:**
+
+| Operation | Safe? | Why |
+|-----------|-------|-----|
+| Change SUMMARY of series | SAFE | Modifying _raw preserves RRULE |
+| Change DESCRIPTION of series | SAFE | Same reason |
+| Change DTSTART of series | DANGEROUS | Changes all occurrence times, MUST preserve RRULE, MUST NOT change to a time that violates the RRULE pattern |
+| Change DTEND/DURATION of series | CAREFUL | Must preserve RRULE |
+| Delete entire series | SAFE | DELETE the resource URL |
+| Delete single occurrence | OUT OF SCOPE | Requires EXDATE (v2 scopes this out) |
+| Modify single occurrence | OUT OF SCOPE | Requires RECURRENCE-ID (v2 scopes this out) |
+
+**Prevention:**
+
+```typescript
+// For recurring events: ALWAYS use parse-modify-serialize on _raw
+function updateRecurringEvent(dto: EventDTO, changes: Partial<EventDTO>): string {
+  const jcal = ICAL.parse(dto._raw);
+  const comp = new ICAL.Component(jcal);
+  const vevent = comp.getFirstSubcomponent('vevent');
+
+  // VERIFY: RRULE still present after our modifications
+  const hadRrule = !!vevent.getFirstProperty('rrule');
+
+  // Apply changes (Pitfall 1 pattern: modify in-place)
+  if (changes.summary !== undefined) {
+    vevent.updatePropertyWithValue('summary', changes.summary);
+  }
+  // ... other safe changes
+
+  // SAFETY CHECK: Did we accidentally lose the RRULE?
+  const hasRrule = !!vevent.getFirstProperty('rrule');
+  if (hadRrule && !hasRrule) {
+    throw new Error(
+      'BUG: RRULE was lost during modification. ' +
+      'This would destroy the recurring series.'
+    );
   }
 
-  return vcardText;
+  return comp.toString();
 }
 ```
 
-**Additional measures:**
-- Support both vCard 3.0 and 4.0 in parser
-- Default to vCard 3.0 for writes (better compatibility)
-- Check server capabilities (some advertise 4.0 support)
-- Test with contacts containing photos, international characters, preferences
+**Phase mapping:** Update event tool. Consider blocking DTSTART changes on recurring events in v2 to minimize risk.
 
-**Phase mapping:** Address in Phase 2 (CardDAV implementation). Affects contact display accuracy.
+**Confidence:** HIGH -- SabreDAV discussion group confirms: "all servers tested against will overwrite the full event with the recurrence instance (effectively deleting the recurrence rule)." Nextcloud issue #439 documents the full-series-deletion bug.
 
 **Sources:**
-- [GitHub: VCard 4.0 text encoding differs from vCard 3.0](https://github.com/mozilla-comm/ical.js/issues/173)
-- [Difference Among vCard Version 2.0, 3.0, & 4.0 - Full Guide](https://www.softaken.com/guide/difference-among-vcard-version-2-0-3-0-4-0/)
-- [ez-vcard Wiki: Version differences](https://github.com/mangstadt/ez-vcard/wiki/Version-differences)
+- [SabreDAV Discussion: Update single recurrence element](https://groups.google.com/g/sabredav-discuss/c/M82DQRJTr4A)
+- [Nextcloud Issue #439: Cannot delete one event in a multi-repeat event](https://github.com/nextcloud/calendar/issues/439)
+- [CalConnect: Recurrences](https://devguide.calconnect.org/iCalendar-Topics/Recurrences/)
+- [Mozilla Wiki: Recurrence and Exceptions](https://wiki.mozilla.org/Calendar:Recurrence_and_Exceptions)
 
 ---
 
-### Pitfall 8: ETag and Sync-Token Mismanagement
+### Pitfall 11: Free/Busy Query -- Inconsistent Server Support
 
-**What goes wrong:** ETags enable efficient sync (fetch only changed items). Mishandling ETags causes full re-sync on every request (slow), or stale data (missing updates).
+**What goes wrong:** The free/busy query tool uses tsdav's `freeBusyQuery()` which sends a `CALDAV:free-busy-query REPORT`. Some SabreDAV-compatible servers return valid VFREEBUSY responses, but others return errors (400, 404, 501) or empty responses.
 
-**Why it happens:** Developers treat ETags as optional metadata. Servers may invalidate sync-tokens without warning. Clients that don't handle invalidation re-sync poorly.
+**Why it happens:** While RFC 4791 defines the `free-busy-query REPORT`, real-world support varies:
+- SabreDAV/Nextcloud: Generally supported, but requires `read-free-busy` privilege
+- DAViCal: Supported since 0.6.0, but "no clients have yet been observed to make CalDAV free-busy-query requests"
+- iCloud: Reportedly returns 400 error on free-busy-query
+- Some corporate servers: May disable or not implement this optional REPORT
+
+**tsdav `freeBusyQuery()` specifics:**
+- Takes `url` (calendar URL) and `timeRange` (start/end in ISO 8601)
+- Returns a single `DAVResponse` (the first result from `collectionQuery`)
+- Time range is converted to compact UTC format internally: `20260127T140000Z`
+- No built-in error handling for servers that don't support it
 
 **Consequences:**
-- Slow sync (re-fetching all events every time)
-- Missing updates (using stale ETag, server returns 304 Not Modified)
-- Version conflicts (concurrent updates clobber each other)
-- Sync-token invalidation errors (403 Forbidden)
-
-**How CalDAV sync works:**
-1. Initial sync: GET all calendar objects, store URLs + ETags
-2. Incremental sync: WebDAV-Sync REPORT with sync-token → server returns changed/deleted URLs
-3. Fetch changed: GET only items with different ETags
-4. Store new sync-token for next sync
-
-**Warning signs:**
-- Every sync fetches all events (no incremental sync)
-- "Received CalDAV GET response without ETag" errors
-- Sync-token invalidation crashes app
-- Multiple clients overwrite each other's changes
+- Free/busy tool works on developer's Nextcloud but fails on user's SOGo/Zimbra
+- Unhandled server errors crash the MCP tool
+- Users on servers without free/busy support get cryptic error messages
 
 **Prevention:**
-```typescript
-interface CalendarCache {
-  syncToken: string | null;
-  events: Map<string, { url: string; etag: string; data: Event }>;
-}
 
-async function syncCalendar(cache: CalendarCache): Promise<void> {
+```typescript
+async function queryFreeBusy(
+  client: DAVClientType,
+  calendarUrl: string,
+  timeRange: { start: string; end: string },
+  logger: Logger
+): Promise<FreeBusyResult> {
   try {
-    // Incremental sync with sync-token
-    const report = await webdavSync(cache.syncToken);
+    const response = await client.freeBusyQuery({
+      url: calendarUrl,
+      timeRange,
+    });
 
-    // Fetch only changed items
-    for (const change of report.changes) {
-      if (change.deleted) {
-        cache.events.delete(change.url);
-      } else if (change.etag !== cache.events.get(change.url)?.etag) {
-        const event = await fetchEvent(change.url);
-        cache.events.set(change.url, {
-          url: change.url,
-          etag: change.etag,
-          data: event
-        });
-      }
+    if (!response || !response.props) {
+      // Server returned empty/malformed response
+      logger.warn({ calendarUrl }, 'Free/busy query returned empty response, falling back');
+      return fallbackFreeBusy(client, calendarUrl, timeRange, logger);
     }
 
-    cache.syncToken = report.newSyncToken;
+    return parseFreeBusyResponse(response);
 
-  } catch (err) {
-    if (isSyncTokenInvalidated(err)) {
-      // Sync-token expired, do full re-sync
-      console.error('Sync token invalidated, performing full sync');
-      cache.syncToken = null;
-      cache.events.clear();
-      await fullSync(cache);
-    } else {
-      throw err;
+  } catch (error: unknown) {
+    const status = (error as any)?.status || (error as any)?.statusCode;
+
+    if (status === 400 || status === 404 || status === 501) {
+      logger.info({ calendarUrl, status },
+        'Server does not support free-busy-query REPORT, using fallback');
+      return fallbackFreeBusy(client, calendarUrl, timeRange, logger);
     }
+
+    throw error;
   }
 }
 
-// Check if server supports WebDAV-Sync
-async function checkSyncSupport(calendarUrl: string): Promise<boolean> {
-  const options = await httpOptions(calendarUrl);
-  return options.headers.get('DAV')?.includes('sync-collection') || false;
+// Fallback: fetch events in time range and compute busy periods client-side
+async function fallbackFreeBusy(
+  client: DAVClientType,
+  calendarUrl: string,
+  timeRange: { start: string; end: string },
+  logger: Logger
+): Promise<FreeBusyResult> {
+  logger.info('Computing free/busy from event data (fallback)');
+
+  const events = await client.fetchCalendarObjects({
+    calendar: { url: calendarUrl } as DAVCalendar,
+    timeRange,
+  });
+
+  // Filter to OPAQUE events (not TRANSPARENT)
+  // Build FREEBUSY periods from DTSTART/DTEND
+  return computeBusyPeriods(events);
 }
 ```
 
-**Additional measures:**
-- Store ETags with calendar objects
-- Handle sync-token invalidation gracefully (full re-sync)
-- Check server WebDAV-Sync support before using sync-tokens
-- Use If-Match header for conditional PUT (prevents conflicts)
-- Document that some servers (older SabreDAV) may not support sync-tokens
+**Phase mapping:** Free/busy tool implementation. The fallback is essential for cross-server compatibility.
 
-**Phase mapping:**
-- Phase 1: Basic GET (no sync)
-- Phase 1.5+: Add ETag caching for efficiency
-- Phase X (v2): Use If-Match for conflict-free writes
+**Confidence:** MEDIUM -- tsdav has `freeBusyQuery()` API (verified in source), RFC 4791 Section 7.10 defines the REPORT, but real-world server support is inconsistent (DAViCal wiki confirms "no clients use it"). The fallback approach is standard practice.
 
 **Sources:**
-- [DAVx5: Technical Information](https://manual.davx5.com/technical_information.html)
-- [GitHub: calendar sync to check etags](https://github.com/python-caldav/caldav/issues/122)
-- [SabreDAV: Building a CalDAV Client](https://sabre.io/dav/building-a-caldav-client/)
-
----
-
-### Pitfall 9: Trailing Slash URL Inconsistency
-
-**What goes wrong:** WebDAV/CalDAV URLs behave differently with/without trailing slashes. Some requests return 301 redirects, others fail. Clients that don't normalize URLs encounter "404 Not Found" or infinite redirect loops.
-
-**Why it happens:** WebDAV distinguishes collections (trailing slash) from resources (no trailing slash). Servers may redirect, or may treat as different resources.
-
-**Consequences:**
-- 301 Moved Permanently redirects on every request (slow)
-- Double slashes (`//`) in URLs cause 301 redirects
-- .well-known URLs redirect with/without trailing slash inconsistently
-- HTTP client doesn't follow redirects → 301 treated as error
-
-**Common patterns:**
-- Collection (calendar): `/calendars/user/default/` (trailing slash)
-- Resource (event): `/calendars/user/default/event123.ics` (no trailing slash)
-- Well-known: `/.well-known/caldav` → redirects to `/remote.php/dav/`
-
-**Warning signs:**
-- 301 redirects in HTTP logs
-- URLs with double slashes
-- Inconsistent behavior between servers
-- "404 Not Found" on URLs that should exist
-
-**Prevention:**
-```typescript
-// Normalize URLs consistently
-function normalizeCalendarUrl(url: string): string {
-  // Collections always end with /
-  // Resources never end with /
-  const parsed = new URL(url);
-
-  // If it's a collection (no file extension), ensure trailing slash
-  if (!parsed.pathname.includes('.')) {
-    if (!parsed.pathname.endsWith('/')) {
-      parsed.pathname += '/';
-    }
-  }
-
-  // Remove double slashes
-  parsed.pathname = parsed.pathname.replace(/\/+/g, '/');
-
-  return parsed.toString();
-}
-
-// Configure HTTP client to follow redirects
-const httpClient = axios.create({
-  maxRedirects: 5, // Follow up to 5 redirects
-  validateStatus: (status) => status < 400 // Treat 3xx as success
-});
-```
-
-**Additional measures:**
-- Test with both trailing/non-trailing slash URLs
-- Log 301 responses during development (indicates normalization issue)
-- Store canonical URLs from server responses (Location header)
-- Document URL format requirements
-
-**Phase mapping:** Address in Phase 1 (HTTP client setup). Affects reliability.
-
-**Sources:**
-- [GitHub: make trailing slash for caldav/carddav redirects optional](https://github.com/nextcloud/server/pull/46079)
-- [GitHub: DAV request with multiple slashes gives 301](https://github.com/owncloud/ocis/issues/1595)
-
----
-
-### Pitfall 10: PHOTO Encoding Hell in vCard
-
-**What goes wrong:** Contact photos use different encoding across vCard versions, servers, and clients. Base64-encoded images, data URLs, HTTP URLs all valid but incompatible.
-
-**Why it happens:** vCard spec evolved through 3 versions with different PHOTO syntax. Servers may store one format, clients expect another.
-
-**Consequences:**
-- Photos don't display (wrong encoding format)
-- Validation errors (`ENCODING=BASE64` invalid in vCard 4.0)
-- Corrupt base64 (newline characters inserted)
-- Empty URI references (`PHOTO;VALUE=URI:` with no URL)
-
-**Format variations:**
-```
-vCard 2.1:  PHOTO;JPEG;ENCODING=BASE64:[base64-data]
-vCard 3.0:  PHOTO;TYPE=JPEG;ENCODING=b:[base64-data]
-vCard 3.0:  PHOTO;TYPE=JPEG;VALUE=URI:http://example.com/photo.jpg
-vCard 4.0:  PHOTO:data:image/jpeg;base64,[base64-data]
-vCard 4.0:  PHOTO;MEDIATYPE=image/jpeg:http://example.com/photo.jpg
-
-WRONG:      PHOTO;TYPE=PNG;ENCODING=BASE64;VALUE=URI:iVBORw0K... (VALUE=URI conflict)
-WRONG:      PHOTO;VALUE=URI: (empty URI)
-WRONG:      Base64 with \n characters inserted by LDAP conversion
-```
-
-**Warning signs:**
-- Contact photos don't display despite server having images
-- Validation errors mentioning ENCODING=BASE64
-- Base64 data with embedded newlines
-- Photos work in one client but not another
-
-**Prevention:**
-```typescript
-// Use library to handle encoding variations
-import vobject from 'sabre/vobject';
-
-function extractPhoto(vcard: VCard): string | null {
-  const photo = vcard.getProperty('PHOTO');
-  if (!photo) return null;
-
-  const value = photo.getValue();
-  const encoding = photo.getParameter('ENCODING');
-  const valueType = photo.getParameter('VALUE');
-
-  if (valueType === 'URI' && value.startsWith('http')) {
-    // External URL
-    return value;
-  } else if (value.startsWith('data:')) {
-    // Data URL (vCard 4.0)
-    return value;
-  } else if (encoding === 'b' || encoding === 'BASE64') {
-    // Base64 inline (vCard 3.0/2.1)
-    const cleaned = value.replace(/\s/g, ''); // Remove newlines
-    const mediaType = photo.getParameter('TYPE') || 'image/jpeg';
-    return `data:${mediaType};base64,${cleaned}`;
-  }
-
-  return null;
-}
-```
-
-**Additional measures:**
-- Test with contacts that have photos from different sources (iOS, Android, Outlook)
-- Normalize base64 encoding (remove whitespace/newlines)
-- Handle empty VALUE=URI gracefully (return null, not crash)
-- Consider skipping photo display in v1 (defer to v2) if too complex
-
-**Phase mapping:**
-- Phase 2 (CardDAV): Parse basic contact info, skip photos
-- Phase 2.5 or v2: Add photo support if time permits
-
-**Sources:**
-- [GitHub: Validation error - ENCODING=BASE64 not valid](https://github.com/nextcloud/server/issues/3366)
-- [GitHub: Default VALUE=URI prevents BASE64 images](https://github.com/sabre-io/vobject/issues/294)
-- [GitHub: CardDAV fatal error when PHOTO VALUE is binary uri](https://github.com/nextcloud/server/issues/4358)
+- [RFC 4791: CALDAV:free-busy-query REPORT](https://icalendar.org/CalDAV-Access-RFC-4791/7-10-caldav-free-busy-query-report.html)
+- [DAViCal Wiki: Free Busy](https://wiki.davical.org/index.php/Free_Busy)
+- [Apple Developer Forums: iCloud freebusy](https://developer.apple.com/forums/thread/698704)
 
 ---
 
 ## Minor Pitfalls
 
-These mistakes cause annoyance or edge cases but are easily fixable.
-
-### Pitfall 11: Escaping in Multi-Valued Properties
-
-**What goes wrong:** iCalendar TEXT properties require escaping commas, semicolons, backslashes, and newlines. Forgetting to escape/unescape corrupts field values.
-
-**Rules:**
-- `,` → `\,` (MUST escape)
-- `;` → `\;` (MUST escape)
-- `\` → `\\` (MUST escape)
-- Newline → `\n` or `\N` (MUST use this sequence)
-- `:` → `:` (SHALL NOT escape)
-
-**Consequences:**
-- Event descriptions with commas get split into multiple values
-- Semicolons break property parsing
-- Literal `\n` appears in text instead of newline
-
-**Prevention:**
-```typescript
-// Use library - don't manually escape
-import ICAL from 'ical.js';
-
-// Library handles escaping automatically
-const event = new ICAL.Component('vevent');
-event.updatePropertyWithValue('summary', 'Meeting; Review, Finalize');
-// Output: SUMMARY:Meeting\; Review\, Finalize
-```
-
-**Phase mapping:** Use library (Phase 1). Only matters if manually building iCalendar strings (not recommended).
-
-**Sources:**
-- [iCalendar.org: Text](https://icalendar.org/iCalendar-RFC-5545/3-3-11-text.html)
-- [Evert Pot: Escaping in iCalendar and vCard](https://evertpot.com/escaping-in-vcards-and-icalendar/)
+These cause edge-case bugs or developer confusion but are easily fixable.
 
 ---
 
-### Pitfall 12: Floating Time Misinterpretation
+### Pitfall 12: tsdav Write Methods Return Raw Response (Not Parsed Data)
 
-**What goes wrong:** iCalendar supports "floating time" (local time without TZID). This represents "same clock time in any timezone", not a fixed moment. Treating floating time as UTC or local timezone produces wrong results.
+**What goes wrong:** tsdav's `createCalendarObject()`, `updateCalendarObject()`, and `deleteCalendarObject()` return a raw `Response` object (Fetch API), NOT a parsed `DAVCalendarObject`. Developers expect a parsed result and access `.data` or `.etag` on the response, getting `undefined`.
 
-**Example:** Birthday at `20260101T090000` (no TZID) means "9 AM in whatever timezone you're in", not "9 AM UTC" or "9 AM Paris time".
+**Why it happens:** The tsdav type signatures clearly show `Promise<Response>`, but developers used to the read APIs (`fetchCalendarObjects` returns `DAVCalendarObject[]`) assume write APIs return similar structured data.
 
-**When it appears:**
-- All-day events (DATE format)
-- Birthdays
-- Holidays
-- Events intentionally timezone-agnostic
+**Verified from tsdav source (v2.1.6):**
+```typescript
+// Read API returns parsed objects
+export declare const fetchCalendarObjects: (...) => Promise<DAVCalendarObject[]>;
 
-**Warning signs:**
-- All-day events showing 11 PM previous day (timezone conversion applied incorrectly)
-- Birthday times shifting by hours
-- Events without TZID assumed to be UTC
+// Write APIs return raw Response
+export declare const createCalendarObject: (...) => Promise<Response>;
+export declare const updateCalendarObject: (...) => Promise<Response>;
+export declare const deleteCalendarObject: (...) => Promise<Response>;
+```
 
 **Prevention:**
+- Always check `response.ok` and `response.status` after write calls
+- Extract ETag from `response.headers.get('etag')`
+- Do NOT try to access `.data` or `.etag` on the Response object
+- Wrap write calls in a helper that handles the raw Response
+
+**Phase mapping:** Core write infrastructure.
+
+**Confidence:** HIGH -- Verified directly in tsdav source code at `/Users/mmaudet/work/mcp-twake/node_modules/tsdav/dist/calendar.d.ts`.
+
+---
+
+### Pitfall 13: DTSTAMP vs LAST-MODIFIED vs CREATED Confusion
+
+**What goes wrong:** When updating an event, the developer updates `LAST-MODIFIED` but forgets `DTSTAMP`, or confuses the two. Some servers use DTSTAMP for conflict detection.
+
+**The differences:**
+- **DTSTAMP:** Date-time the iCalendar object was created or last modified. REQUIRED. In the context of a scheduling message, it represents when the last revision of the object was sequenced. Must be UTC.
+- **LAST-MODIFIED:** When the calendar component was last revised in the calendar store. OPTIONAL.
+- **CREATED:** When the calendar component was first created in the calendar store. OPTIONAL. Never update this.
+- **SEQUENCE:** Integer that increments with each significant revision. Used by scheduling to detect rescheduling.
+
+**Prevention:**
+
 ```typescript
-// Check for floating time
-function parseEventTime(dtstart: string, tzid?: string): DateTime {
-  if (!tzid && !dtstart.endsWith('Z')) {
-    // Floating time - don't convert to UTC
-    return DateTime.fromISO(dtstart, { zone: 'local' });
-  } else if (dtstart.endsWith('Z')) {
-    // UTC time
-    return DateTime.fromISO(dtstart, { zone: 'UTC' });
-  } else {
-    // Fixed timezone
-    return DateTime.fromISO(dtstart, { zone: tzid });
+// On UPDATE: always update DTSTAMP and SEQUENCE
+function prepareForUpdate(vevent: ICAL.Component): void {
+  // DTSTAMP: MUST be updated to current UTC time
+  vevent.updatePropertyWithValue('dtstamp', ICAL.Time.now());
+
+  // LAST-MODIFIED: SHOULD be updated if present
+  if (vevent.getFirstProperty('last-modified')) {
+    vevent.updatePropertyWithValue('last-modified', ICAL.Time.now());
   }
+
+  // SEQUENCE: increment for scheduling-significant changes
+  const seq = vevent.getFirstPropertyValue('sequence');
+  if (seq !== null) {
+    vevent.updatePropertyWithValue('sequence', (parseInt(seq, 10) || 0) + 1);
+  }
+
+  // CREATED: NEVER modify this
 }
 ```
 
-**Phase mapping:** Address in Phase 1 (event parsing). Affects display accuracy.
+**Phase mapping:** Update event tool.
 
-**Sources:**
-- [iCalendar.org: Time Zone Identifier](https://icalendar.org/iCalendar-RFC-5545/3-2-19-time-zone-identifier.html)
-- [CalConnect: Handling Dates and Times](https://devguide.calconnect.org/iCalendar-Topics/Handling-Dates-and-Times/)
+**Confidence:** HIGH -- RFC 5545 Sections 3.8.7.2 (DTSTAMP), 3.8.7.3 (LAST-MODIFIED), 3.8.7.1 (CREATED), 3.8.7.4 (SEQUENCE) define these clearly.
 
 ---
 
-### Pitfall 13: UID vs URL Confusion
+### Pitfall 14: Content-Type Header Must Be Correct
 
-**What goes wrong:** Developers assume UID (calendar object identifier) and URL (resource location) are related. They're not. Same UID can appear at different URLs. Same URL can change UIDs (wrong, but happens).
+**What goes wrong:** PUT request sent with wrong Content-Type header. Server rejects with 415 Unsupported Media Type.
 
-**Rules:**
-- UID: Stable identifier for calendar object (survives moves)
-- URL: Location of resource (can change)
-- Both required for tracking
-- Never change UID (breaks sync)
-- Never assume UID = filename
+**Correct values:**
+- CalDAV events: `Content-Type: text/calendar; charset=utf-8`
+- CardDAV contacts: `Content-Type: text/vcard; charset=utf-8`
 
-**Consequences:**
-- Duplicate event detection fails (using URL instead of UID)
-- Moved events treated as new + deleted (tracking by UID only)
-- Recurring event instances misidentified
+**tsdav handles this:** Verified in source -- `createCalendarObject` and `updateCalendarObject` set `'content-type': 'text/calendar; charset=utf-8'` automatically. `createVCard` and `updateVCard` set `'content-type': 'text/vcard; charset=utf-8'`. No action needed if using tsdav's API.
 
-**Prevention:**
-```typescript
-interface CalendarObject {
-  uid: string;  // From iCalendar UID property
-  url: string;  // From WebDAV href
-  etag: string; // From WebDAV getetag
-  // Both UID and URL required
-}
+**Risk:** Only if someone bypasses tsdav and makes raw HTTP requests.
 
-// Index by both
-const byUid = new Map<string, CalendarObject>();
-const byUrl = new Map<string, CalendarObject>();
-```
+**Phase mapping:** Not a risk with tsdav. Document for awareness.
 
-**Phase mapping:** Address in Phase 1 (data model). Foundation for sync.
-
-**Sources:**
-- [SabreDAV: Building a CalDAV Client](https://sabre.io/dav/building-a-caldav-client/)
+**Confidence:** HIGH -- Verified in tsdav source code.
 
 ---
 
-### Pitfall 14: VALARM Trigger Parsing
+### Pitfall 15: Delete Without ETag Skips Conflict Check
 
-**What goes wrong:** iCalendar alarms (VALARM) use TRIGGER property with either relative duration (`-PT15M` = 15 min before) or absolute datetime (`20260127T140000Z`). Parsers that assume one format fail on the other.
+**What goes wrong:** tsdav's `deleteCalendarObject` sends `If-Match: <etag>` only if the `etag` field is present (via `cleanupFalsy`). If the cached `DAVCalendarObject` has `etag: undefined`, the DELETE request goes out without any `If-Match` header, meaning it will unconditionally delete the resource regardless of concurrent modifications.
 
-**Formats:**
-- Relative: `TRIGGER:-PT15M` (15 minutes before, DURATION type)
-- Absolute: `TRIGGER;VALUE=DATE-TIME:20260127T140000Z` (specific time)
-- Related to: `TRIGGER;RELATED=END:-PT5M` (5 min before END, not START)
+**Why it happens:** Some tsdav fetch modes don't populate the ETag field. Or the ETag was lost after a previous update (Pitfall 3).
 
 **Consequences:**
-- Alarm times calculated wrong (assuming START when it's END-relative)
-- Absolute triggers treated as durations (parse error)
-- Recurring events: absolute trigger fires once, relative fires every instance
+- Unconditional DELETE succeeds even if another client modified the event
+- Data loss: the other client's changes are permanently deleted
 
 **Prevention:**
-```typescript
-function parseTrigger(valarm: Component): Date | Duration {
-  const trigger = valarm.getFirstPropertyValue('trigger');
-  const valueType = trigger.getParameter('value');
 
-  if (valueType === 'DATE-TIME') {
-    // Absolute trigger (must be UTC)
-    return trigger.toJSDate();
-  } else {
-    // Relative trigger (DURATION)
-    const related = trigger.getParameter('related') || 'START';
-    return { duration: trigger, relatedTo: related };
+```typescript
+// Before DELETE: verify we have an ETag
+async function safeDelete(
+  client: DAVClientType,
+  calendarObject: DAVCalendarObject,
+  logger: Logger
+): Promise<Response> {
+  if (!calendarObject.etag) {
+    logger.warn({ url: calendarObject.url }, 'No ETag for delete, fetching fresh');
+    // Re-fetch to get current ETag
+    const fresh = await client.fetchCalendarObjects({
+      calendar: { url: getCollectionUrl(calendarObject.url) } as DAVCalendar,
+      objectUrls: [calendarObject.url],
+    });
+    if (fresh.length === 0) {
+      throw new Error('Event not found (may have been already deleted)');
+    }
+    calendarObject = fresh[0];
   }
+
+  return client.deleteCalendarObject({ calendarObject });
 }
 ```
 
-**Phase mapping:** Low priority for v1 (alarms not displayed). Consider for v2.
+**Phase mapping:** Delete tool implementations.
 
-**Sources:**
-- [iCalendar.org: Alarm Component](https://icalendar.org/iCalendar-RFC-5545/3-6-6-alarm-component.html)
-- [iCalendar.org: Trigger](https://icalendar.org/iCalendar-RFC-5545/3-8-6-3-trigger.html)
-
----
-
-### Pitfall 15: vCard FN Property Validation
-
-**What goes wrong:** CardDAV servers strictly require FN (Formatted Name) property exactly once per vCard. Missing or duplicate FN causes "415 Unsupported Media Type" or validation errors.
-
-**Rules:**
-- FN property MUST appear exactly once
-- N property usually required (name components)
-- UID property required for CardDAV
-
-**Consequences:**
-- Contacts fail to sync
-- Server rejects PUT with "FN property must appear exactly 1 time"
-- Import fails silently
-
-**Prevention:**
-```typescript
-function validateVCard(vcard: VCard): void {
-  const fn = vcard.getAllProperties('FN');
-  if (fn.length === 0) {
-    throw new Error('vCard missing required FN property');
-  } else if (fn.length > 1) {
-    throw new Error('vCard has duplicate FN property');
-  }
-
-  // CardDAV also requires UID
-  if (!vcard.getFirstProperty('UID')) {
-    throw new Error('vCard missing required UID property for CardDAV');
-  }
-}
-```
-
-**Phase mapping:** Only matters for v2 (write operations). v1 reads only.
-
-**Sources:**
-- [Bugzilla: Validation error - FN must appear exactly 1 time](https://bugzilla.mozilla.org/show_bug.cgi?id=1373576)
-- [GitHub: Validation error in vCard - FN property](https://github.com/nextcloud/contacts/issues/206)
-
----
-
-### Pitfall 16: Depth Header Misuse
-
-**What goes wrong:** PROPFIND and REPORT methods use Depth header differently. Wrong depth causes over-fetching (slow) or under-fetching (missing data).
-
-**Rules:**
-- PROPFIND: Supports `Depth: 0` (resource only), `Depth: 1` (resource + children), `Depth: infinity` (entire tree)
-- calendar-query REPORT: Defaults to `Depth: 0` if omitted, supports `Depth: 1`
-- calendar-multiget REPORT: MUST ignore Depth header
-
-**Consequences:**
-- Fetching all calendars recursively (slow, unnecessary)
-- Missing child collections (depth too shallow)
-- calendar-multiget with Depth header (ignored but sent anyway)
-
-**Prevention:**
-```typescript
-// PROPFIND: Use Depth: 1 to list calendar collections
-await propfind(principalUrl, {
-  headers: { Depth: '1' },
-  props: ['displayname', 'resourcetype']
-});
-
-// calendar-query: Use Depth: 0 for events in one calendar
-await report(calendarUrl, 'calendar-query', {
-  headers: { Depth: '0' }, // Or omit (defaults to 0)
-  // ...
-});
-
-// calendar-multiget: Don't send Depth (ignored anyway)
-await report(calendarUrl, 'calendar-multiget', {
-  // No Depth header
-  hrefs: ['/cal/event1.ics', '/cal/event2.ics']
-});
-```
-
-**Phase mapping:** Address in Phase 1 (HTTP client). Affects performance and correctness.
-
-**Sources:**
-- [RFC 4791: Calendaring Extensions to WebDAV](https://datatracker.ietf.org/doc/html/rfc4791)
-- [iCalendar.org: calendar-query REPORT](https://icalendar.org/CalDAV-Access-RFC-4791/7-8-caldav-calendar-query-report.html)
-
----
-
-### Pitfall 17: SabreDAV Client-Specific Quirks
-
-**What goes wrong:** SabreDAV includes workarounds for broken clients (Evolution, Windows, Office). When acting as a client, avoid triggering these workarounds or relying on non-standard behavior.
-
-**Known quirks:**
-- Windows requires port 80/443 (no custom ports)
-- Windows 10 only supports HTTP Basic (not Digest)
-- Evolution prepends backslash to quote marks (SabreDAV strips it)
-- Office breaks on `{DAV:}lockroot` property (SabreDAV has disable flag)
-- Some clients add non-standard properties (X-APPLE-*, X-EVOLUTION-*)
-
-**Prevention:**
-- Use standard ports (443 for HTTPS) in documentation examples
-- Implement HTTP Basic Auth only (simpler, Windows-compatible)
-- Preserve non-standard properties (X-* properties)
-- Don't rely on SabreDAV-specific extensions
-- Test with multiple servers (Nextcloud, iCloud, Google Calendar)
-
-**Phase mapping:** Throughout development. Test against multiple CalDAV servers.
-
-**Sources:**
-- [SabreDAV: Frequently Asked Questions](https://sabre.io/dav/faq/)
-- [SabreDAV: Windows client issues](https://sabre.io/dav/clients/windows/)
+**Confidence:** HIGH -- Verified in tsdav source: `cleanupFalsy({ 'If-Match': etag, ...headers })` strips undefined/falsy etag, resulting in no If-Match header.
 
 ---
 
 ## Phase-Specific Warnings
 
-| Phase | Likely Pitfall | Mitigation |
-|-------|---------------|------------|
-| Phase 1: MCP Bootstrap | Pitfall 1 (stdout contamination) | Configure logging to stderr from day 1 |
-| Phase 1: CalDAV Client | Pitfall 4 (XML namespaces) | Use XML builder with namespace support |
-| Phase 1: HTTP Client | Pitfall 5 (HTTP security) | Validate HTTPS on startup |
-| Phase 1: Event Queries | Pitfall 3 (lossy iCalendar) | Store raw iCalendar text, use ical.js library |
-| Phase 1: Timezone Display | Pitfall 6 (recurring + DST) | Use Luxon/date-fns-tz, test March/November |
-| Phase 2: CardDAV | Pitfall 2 (lossy vCard) | Store raw vCard text, use sabre/vobject |
-| Phase 2: Contact Display | Pitfall 7 (vCard versions) | Support both 3.0 and 4.0 with library |
-| Phase 1.5+: Optimization | Pitfall 8 (ETag/sync-token) | Implement incremental sync with graceful fallback |
-| Phase X (v2 writes) | Pitfall 2 & 3 (data loss) | Update raw text in-place, preserve unknown properties |
+| Phase / Feature | Likely Pitfall | Severity | Mitigation |
+|----------------|---------------|----------|------------|
+| Write infrastructure | Pitfall 2 (ETag 412), Pitfall 3 (no ETag returned) | CRITICAL | Build `safeUpdate()` and `putAndRefresh()` helpers first |
+| Write infrastructure | Pitfall 5 (stale cache) | CRITICAL | Call `invalidate()` after every write |
+| Write infrastructure | Pitfall 12 (raw Response) | MODERATE | Wrap tsdav write calls in typed helpers |
+| Create event | Pitfall 6 (missing properties) | MODERATE | Validate PRODID/VERSION/UID/DTSTAMP before PUT |
+| Create event | Pitfall 8 (UID uniqueness) | MODERATE | Use `crypto.randomUUID()` |
+| Create event | Pitfall 9 (URL construction) | MODERATE | Generate `{uuid}.ics` filenames |
+| Create contact | Pitfall 7 (FN/UID validation) | MODERATE | Always set FN, validate before PUT |
+| Update event | Pitfall 1 (lossy round-trip) | CRITICAL | Parse `_raw`, modify in-place, re-serialize |
+| Update event | Pitfall 4 (scheduling side-effects) | CRITICAL | Do not add ORGANIZER/ATTENDEE; warn on existing |
+| Update event | Pitfall 10 (recurring series destruction) | CRITICAL | Safety check: verify RRULE preserved |
+| Update event | Pitfall 13 (DTSTAMP/SEQUENCE) | MODERATE | Always update DTSTAMP + SEQUENCE |
+| Delete event | Pitfall 4 (cancellation emails) | HIGH | Warn user if event has attendees |
+| Delete event | Pitfall 15 (delete without ETag) | MODERATE | Fetch fresh ETag if missing |
+| Free/busy | Pitfall 11 (server support) | MODERATE | Implement client-side fallback |
 
 ---
 
-## Testing Checklist
+## Testing Checklist for Write Operations
 
-Before considering a phase complete, test against these pitfall scenarios:
+Before considering write operations complete, verify:
 
-**MCP Protocol:**
-- [ ] No `console.log()` to stdout (search codebase)
-- [ ] Logger configured to stderr
-- [ ] Test with actual MCP client (Claude Desktop), not just mocks
+**Data Integrity:**
+- [ ] Create event: generated .ics contains PRODID, VERSION, UID, DTSTAMP, DTSTART, DTEND
+- [ ] Create contact: generated .vcf contains VERSION, FN, N, UID
+- [ ] Update event: all original properties preserved (VALARM, X-properties, ATTENDEE params)
+- [ ] Update event: RRULE preserved on recurring events
+- [ ] Update contact: all original properties preserved (photos, groups, custom fields)
+- [ ] UID is UUID format, globally unique, never modified during update
 
-**CalDAV/CardDAV Protocol:**
-- [ ] HTTPS validation rejects `http://` URLs (except localhost)
-- [ ] XML namespaces declared in all PROPFIND/REPORT requests
-- [ ] HTTP client follows 301 redirects
-- [ ] URLs normalized (trailing slashes for collections)
+**ETag / Concurrency:**
+- [ ] Update uses If-Match with current ETag
+- [ ] Create uses If-None-Match: * (tsdav handles this)
+- [ ] 412 Precondition Failed handled gracefully (user-friendly error)
+- [ ] Missing ETag after PUT triggers re-fetch
+- [ ] Delete verifies ETag is present before sending
 
-**iCalendar Parsing:**
-- [ ] Raw iCalendar text stored, not just parsed fields
-- [ ] Recurring events tested across DST boundary (March/November)
-- [ ] All-day events display correct date (not shifted by timezone)
-- [ ] RRULE not expanded client-side (use server calendar-query)
-- [ ] UID preserved (never modified)
+**Cache Coherence:**
+- [ ] Cache invalidated after successful create/update/delete
+- [ ] Read immediately after write returns the new data
+- [ ] Calendar list refreshed after create/delete (CTag changed)
 
-**vCard Parsing:**
-- [ ] Raw vCard text stored, not just parsed fields
-- [ ] vCard 3.0 and 4.0 both handled
-- [ ] International characters render correctly (UTF-8)
-- [ ] Photos deferred or encoded correctly (data URL/base64/URI)
+**Scheduling Safety:**
+- [ ] New events do NOT include ORGANIZER/ATTENDEE
+- [ ] Update to event with attendees warns user about potential re-invitations
+- [ ] Delete of event with attendees warns user about cancellation emails
 
-**Synchronization:**
-- [ ] ETags stored with resources
-- [ ] Sync-token invalidation handled gracefully (fall back to full sync)
-- [ ] Conflict detection (If-Match) for v2 writes
+**Server Compatibility:**
+- [ ] Test against SabreDAV (Twake) -- primary target
+- [ ] Test against Nextcloud -- most common SabreDAV deployment
+- [ ] Free/busy fallback works when server doesn't support REPORT
 
 **Edge Cases:**
-- [ ] Empty calendars don't crash
-- [ ] Events without end time handled
-- [ ] Contacts without email/phone handled
-- [ ] Missing VTIMEZONE handled (floating time)
-- [ ] Recurring events without UNTIL handled (infinite series)
+- [ ] Create event with special characters in summary (commas, semicolons, newlines)
+- [ ] Create contact with international characters (UTF-8)
+- [ ] Delete already-deleted event handled gracefully (404)
+- [ ] Update event that was modified by another client (412 recovery)
+- [ ] All-day event creation (DATE format, not DATE-TIME)
 
 ---
 
@@ -997,89 +972,56 @@ Before considering a phase complete, test against these pitfall scenarios:
 
 | Area | Confidence | Reason |
 |------|------------|--------|
-| MCP stdio pitfalls | HIGH | Official MCP docs + NearForm article + GitHub issues |
-| CalDAV protocol | HIGH | SabreDAV official client guide + RFC 4791 + multiple issue trackers |
-| CardDAV protocol | HIGH | SabreDAV CardDAV guide + RFC 6352 + version comparison docs |
-| iCalendar parsing | HIGH | RFC 5545 spec + Nylas engineering blog + ical.js library docs |
-| vCard parsing | HIGH | RFC 6350 spec + vCard version comparison + SabreDAV validation |
-| Timezone handling | HIGH | CalConnect guide + iCalendar spec + DST edge case issues |
-| SabreDAV quirks | MEDIUM | SabreDAV FAQ + client docs, but less real-world data |
-| TypeScript XML | MEDIUM | Library comparisons + namespace handling issues |
-
----
-
-## Summary
-
-The most critical pitfalls for mcp-twake v1 are:
-
-1. **stdout contamination** (Pitfall 1) - Breaks entire MCP protocol, address immediately
-2. **Data preservation** (Pitfalls 2 & 3) - Foundation for v2, store raw text now
-3. **XML namespaces** (Pitfall 4) - Breaks CalDAV communication, use library
-4. **HTTPS validation** (Pitfall 5) - Security issue, validate on startup
-5. **Timezone handling** (Pitfall 6) - User-visible bugs, test thoroughly
-
-Lower-priority pitfalls (ETags, URL normalization, photo encoding) can be addressed incrementally or deferred to v2.
-
-**Key recommendation:** Use established libraries (ical.js, sabre/vobject, xmlbuilder2) rather than manual parsing. The edge cases are too numerous to handle correctly without library support.
+| ETag/If-Match behavior | HIGH | RFC 4791, SabreDAV official docs, tsdav source verified |
+| Data preservation (round-trip) | HIGH | SabreDAV official client guide explicit warning |
+| Server-side scheduling | HIGH | RFC 6638, SabreDAV scheduling docs |
+| iCalendar generation | HIGH | RFC 5545, SabreDAV validation blog, ical.js wiki |
+| vCard generation | HIGH | SabreDAV CardDAV guide, Nextcloud issues, RFC 6350 |
+| Cache invalidation | HIGH | Direct codebase analysis of existing CollectionCache |
+| Free/busy support | MEDIUM | RFC 4791 defines it, but server support inconsistent per DAViCal wiki |
+| tsdav write API | HIGH | Verified directly in node_modules source code |
+| Recurring event safety | HIGH | SabreDAV discussion group, Nextcloud issues, CalConnect guide |
+| UID management | HIGH | RFC 7986, CalConnect UID guide, Nextcloud issues |
 
 ---
 
 ## Sources
 
-### MCP Protocol
-- [Model Context Protocol: Transports](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
-- [MCP Framework: STDIO Transport](https://mcp-framework.com/docs/Transports/stdio-transport/)
-- [NearForm: Implementing MCP - Tips, Tricks and Pitfalls](https://nearform.com/digital-community/implementing-model-context-protocol-mcp-tips-tricks-and-pitfalls/)
-- [Medium: Understanding MCP Stdio transport](https://medium.com/@laurentkubaski/understanding-mcp-stdio-transport-protocol-ae3d5daf64db)
-- [GitHub Issue: MCP server stdio mode corrupted by stdout](https://github.com/ruvnet/claude-flow/issues/835)
-
-### CalDAV Protocol
-- [RFC 4791: Calendaring Extensions to WebDAV](https://datatracker.ietf.org/doc/html/rfc4791)
-- [SabreDAV: Building a CalDAV Client](https://sabre.io/dav/building-a-caldav-client/)
-- [SabreDAV: Authentication](https://sabre.io/dav/authentication/)
-- [SabreDAV: Frequently Asked Questions](https://sabre.io/dav/faq/)
-- [Google CalDAV API Developer's Guide](https://developers.google.com/calendar/caldav/v2/guide)
-- [iCalendar.org: CalDAV calendar-query REPORT](https://icalendar.org/CalDAV-Access-RFC-4791/7-8-caldav-calendar-query-report.html)
-- [Mail Archive: CalDAV XML response not valid](https://www.mail-archive.com/devel@cyrus.topicbox.com/msg00072.html)
-- [GitHub: propfind assumes DAV header always exists](https://github.com/nextcloud/cdav-library/issues/874)
-
-### CardDAV Protocol
+### RFC Specifications
+- [RFC 4791: Calendaring Extensions to WebDAV (CalDAV)](https://datatracker.ietf.org/doc/html/rfc4791)
+- [RFC 5545: iCalendar Specification](https://www.rfc-editor.org/rfc/rfc5545)
+- [RFC 6350: vCard Format](https://datatracker.ietf.org/doc/html/rfc6350)
 - [RFC 6352: CardDAV](https://datatracker.ietf.org/doc/rfc6352/)
-- [SabreDAV: Building a CardDAV Client](https://sabre.io/dav/building-a-carddav-client/)
-- [SabreDAV: vObject Usage Instructions](https://sabre.io/vobject/vcard/)
-- [Google People API: CardDAV](https://developers.google.com/people/carddav)
+- [RFC 6638: Scheduling Extensions to CalDAV](https://datatracker.ietf.org/doc/rfc6638/)
+- [RFC 7986: New Properties for iCalendar](https://www.rfc-editor.org/rfc/rfc7986.html)
 
-### iCalendar Parsing
-- [RFC 5545: iCalendar](https://tools.ietf.org/html/rfc5545)
-- [iCalendar.org: Recurrence Rule](https://icalendar.org/iCalendar-RFC-5545/3-8-5-3-recurrence-rule.html)
-- [Nylas: The Deceptively Complex World of Calendar Events and RRULEs](https://www.nylas.com/blog/calendar-events-rrules/)
-- [CalConnect: Handling Dates and Times](https://devguide.calconnect.org/iCalendar-Topics/Handling-Dates-and-Times/)
-- [iCalendar.org: Time Zone Component](https://icalendar.org/iCalendar-RFC-5545/3-6-5-time-zone-component.html)
-- [iCalendar.org: Alarm Component](https://icalendar.org/iCalendar-RFC-5545/3-6-6-alarm-component.html)
-- [iCalendar.org: Text Escaping](https://icalendar.org/iCalendar-RFC-5545/3-3-11-text.html)
-- [Evert Pot: Escaping in vCards and iCalendar](https://evertpot.com/escaping-in-vcards-and-icalendar/)
+### SabreDAV Official Documentation
+- [Building a CalDAV Client](https://sabre.io/dav/building-a-caldav-client/)
+- [Building a CardDAV Client](https://sabre.io/dav/building-a-carddav-client/)
+- [CalDAV Scheduling](https://sabre.io/dav/scheduling/)
+- [Validation Changes in sabre/dav 3.2](https://sabre.io/blog/2016/validation-changes/)
 
-### vCard Parsing
-- [RFC 6350: vCard](https://datatracker.ietf.org/doc/html/rfc6350)
-- [CalConnect: vCard 4.0](https://devguide.calconnect.org/vCard/vcard-4/)
-- [GitHub: VCard 4.0 text encoding differs from vCard 3.0](https://github.com/mozilla-comm/ical.js/issues/173)
-- [Softaken: Difference Among vCard Version 2.0, 3.0, & 4.0](https://www.softaken.com/guide/difference-among-vcard-version-2-0-3-0-4-0/)
-- [ez-vcard Wiki: Version differences](https://github.com/mangstadt/ez-vcard/wiki/Version-differences)
-- [GitHub: Validation error - ENCODING=BASE64 not valid](https://github.com/nextcloud/server/issues/3366)
-- [GitHub: Default VALUE=URI prevents BASE64 images](https://github.com/sabre-io/vobject/issues/294)
-- [GitHub: CardDAV fatal error when PHOTO VALUE is binary uri](https://github.com/nextcloud/server/issues/4358)
-- [Bugzilla: FN property must appear exactly 1 time](https://bugzilla.mozilla.org/show_bug.cgi?id=1373576)
+### CalConnect Developer Guide
+- [Building a CardDAV Client](https://devguide.calconnect.org/CardDAV/building-a-carddav-client/)
+- [Recurrences](https://devguide.calconnect.org/iCalendar-Topics/Recurrences/)
+- [UID](https://devguide.calconnect.org/Data-Model/UID/)
 
-### Synchronization
+### ical.js
+- [Creating basic iCalendar](https://github.com/kewisch/ical.js/wiki/Creating-basic-iCalendar)
+
+### tsdav
+- [GitHub Repository](https://github.com/natelindev/tsdav)
+- [npm: tsdav](https://www.npmjs.com/package/tsdav)
+
+### Issue Trackers (Real-World Evidence)
+- [SabreDAV Issue #574: 412 Precondition Failed updating contact](https://github.com/sabre-io/dav/issues/574)
+- [SabreDAV Issue #1264: Calendar object with same UID](https://github.com/sabre-io/dav/issues/1264)
+- [Nextcloud Issue #14428: ETag If-None-Match 412](https://github.com/nextcloud/server/issues/14428)
+- [Nextcloud Issue #206: FN property must appear exactly 1 time](https://github.com/nextcloud/contacts/issues/206)
+- [Nextcloud Issue #30827: VCard with uid already exists](https://github.com/nextcloud/server/issues/30827)
+- [Nextcloud Issue #439: Cannot delete one event in multi-repeat](https://github.com/nextcloud/calendar/issues/439)
+- [SabreDAV Discussion: Update single recurrence element](https://groups.google.com/g/sabredav-discuss/c/M82DQRJTr4A)
+
+### Client References
 - [DAVx5: Technical Information](https://manual.davx5.com/technical_information.html)
-- [GitHub: calendar sync to check etags](https://github.com/python-caldav/caldav/issues/122)
-- [GitHub: Received CalDAV GET response without ETag](https://github.com/nextcloud/server/issues/6657)
-
-### WebDAV URLs
-- [GitHub: make trailing slash for caldav/carddav redirects optional](https://github.com/nextcloud/server/pull/46079)
-- [GitHub: DAV request with multiple slashes gives 301](https://github.com/owncloud/ocis/issues/1595)
-
-### TypeScript XML Libraries
-- [fast-xml-parser - npm](https://www.npmjs.com/package/fast-xml-parser)
-- [GitHub: ts-xml-parser](https://github.com/FullStackPlayer/ts-xml-parser)
-- [WebDevTutor: Parsing XML in TypeScript](https://www.webdevtutor.net/blog/typescript-xml-parser)
+- [DAViCal Wiki: Free Busy](https://wiki.davical.org/index.php/Free_Busy)

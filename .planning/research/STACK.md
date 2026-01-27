@@ -1,547 +1,680 @@
-# Technology Stack
+# Technology Stack: v2 Write Operations & Free/Busy
 
-**Project:** mcp-twake
+**Project:** mcp-twake v2 milestone
 **Researched:** 2026-01-27
-**Overall Confidence:** HIGH
+**Scope:** Stack additions/changes needed for CalDAV/CardDAV write operations and free/busy queries
+**Overall confidence:** HIGH (verified against installed source code)
 
 ## Executive Summary
 
-For a TypeScript MCP server connecting to CalDAV/CardDAV (SabreDAV-compatible) servers, the 2026 stack centers around the official `@modelcontextprotocol/sdk` (v1.x), `tsdav` for CalDAV/CardDAV operations, `ical.js` for iCalendar parsing, and modern TypeScript tooling (TypeScript 5.9, Node.js 22 LTS, tsdown bundler, Vitest). This stack prioritizes stability, type safety, and performance.
+The existing stack (tsdav 2.1.6, ical.js 2.2.1) already contains everything needed for v2 write operations. **No new npm dependencies are required.** tsdav provides `createCalendarObject`, `updateCalendarObject`, `deleteCalendarObject`, plus CardDAV equivalents (`createVCard`, `updateVCard`, `deleteVCard`), and a standalone `freeBusyQuery` function. ical.js supports full bidirectional iCalendar/vCard generation (not just parsing) via `Component`, `Property`, `Event`, `Time`, and `Recur` classes, plus `stringify()` for serialization. UUID generation uses Node.js built-in `crypto.randomUUID()` (available since Node 14.17, project requires >=18).
 
 ---
 
-## Core Framework & Runtime
+## Question-by-Question Findings
 
-### MCP Server Framework
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **@modelcontextprotocol/sdk** | **v1.x (recommended)** | MCP server implementation | Official TypeScript SDK for Model Context Protocol. v2 is in pre-alpha (anticipated Q1 2026), but v1.x remains the production-ready version with 6+ months support post-v2. Includes stdio transport, tools/resources/prompts support, and Zod-based validation. **HIGH confidence** |
-| **Node.js** | **22.x LTS (Jod)** | JavaScript runtime | Node.js 22 is in Maintenance LTS (supported until April 2027). Provides stable, production-ready runtime. Node.js 24.x (Krypton) is also available in Active LTS if longer support is needed (until 2028-04-30). **HIGH confidence** |
-| **TypeScript** | **5.9.x** | Type system & compiler | Latest stable release (August 2025, docs updated January 2026). Includes deferred module evaluation, improved tsconfig.json defaults, and enhanced DOM documentation. Required for type safety and tooling. **HIGH confidence** |
+### Q1: Does tsdav support calendar write operations?
 
-### Why Not Other Options?
-- **Python MCP SDK**: Project explicitly chose TypeScript to align with the reference implementation and for strong typing
-- **Node.js 23/25**: Odd-numbered releases are Current (short support window); stick to even-numbered LTS releases
-- **TypeScript 5.8**: 5.9 is the latest stable release with better developer experience
+**Answer: YES.** All three operations are available on the `createDAVClient` return object.
 
----
+**Confidence:** HIGH (verified against installed `tsdav@2.1.6` source code)
 
-## CalDAV/CardDAV Client
+#### `createCalendarObject`
 
-### Primary CalDAV/CardDAV Library
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **tsdav** | **2.1.6+** | CalDAV/CardDAV/WebDAV client | Native TypeScript WebDAV client supporting CalDAV, CardDAV, and WebDAV. Works in Node.js and browser. Includes OAuth2 & basic auth helpers built-in. Well-tested (35k+ downloads), actively maintained (last updated Oct 2024). Supports PROPFIND/REPORT XML operations needed for CalDAV queries. **MEDIUM-HIGH confidence** |
-
-**Key Dependencies of tsdav:**
-- `xml-js` (1.6.11): XML parsing for WebDAV responses
-- `cross-fetch` (4.1.0): HTTP client (Node.js & browser compatible)
-- `base-64` (1.0.0): Base64 encoding for basic auth
-- `debug` (4.4.3): Debugging utility
-
-### Alternatives Considered
-| Library | Why Not |
-|---------|---------|
-| **ts-caldav** (0.2.7) | More recent (2 months old) but smaller user base, less battle-tested than tsdav. Consider for v2 if tsdav limitations emerge. |
-| **dav** (lambdabaa) | Lower-level API undergoing changes; less stable than tsdav. |
-| **cdav-library** (Nextcloud) | Nextcloud-specific; tsdav is more general-purpose. |
-| **webdav-client** (perry-mitchell) | General WebDAV client without CalDAV/CardDAV-specific workflows that tsdav provides. |
-
-**Recommendation:** Start with **tsdav** for v1. Monitor ts-caldav as it matures.
-
----
-
-## Data Parsing (iCalendar & vCard)
-
-### iCalendar Parser
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **ical.js** | **2.2.1+** | iCalendar (.ics) parsing | Zero dependencies, supports RFC 5545 (iCalendar), RFC 7265 (jCal), RFC 6350 (vCard), RFC 7095 (jCard). Active project (1.2k stars, released Aug 2025). Includes recurrence rule (RRULE) calculation and timezone support. Works in Node.js and browser. Most mature and comprehensive iCalendar parser. **HIGH confidence** |
-
-### vCard Parser
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **vcard4-ts** | **Latest** | vCard (.vcf) parsing | TypeScript-first vCard 4.0 library with type safety. RFC 6350 compliant. Properties accessible as JavaScript/TypeScript properties (uppercase with underscores). Actively maintained (updated Dec 2025). **MEDIUM-HIGH confidence** |
-
-### Alternatives Considered
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| iCalendar | ical.js | icalts | icalts is TypeScript-native (inspired by ical.js) but less mature/tested. ical.js has zero deps and broader ecosystem support. |
-| iCalendar | ical.js | node-ical | Node.js-only; ical.js works in both Node.js and browser (future-proof). |
-| iCalendar | ical.js | ts-ics | Smaller ecosystem, less comprehensive than ical.js. |
-| vCard | vcard4-ts | vcard4 | vcard4 is RFC 6350 compliant with TypeScript types, but vcard4-ts prioritizes type safety from the start. Both are viable; vcard4-ts has cleaner API. |
-| vCard | vcard4-ts | vcfer | Good library but vcard4-ts has better TypeScript integration. |
-
-**Note:** ical.js already includes vCard support (RFC 6350/7095), so you may not need a separate vCard library. Test ical.js's vCard parsing first; add vcard4-ts only if needed.
-
----
-
-## Schema Validation
-
-### Validation Library
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **Zod** | **4.3.5+** | Runtime schema validation & type inference | Required peer dependency for `@modelcontextprotocol/sdk`. TypeScript-first validation library with automatic type inference. MCP SDK uses Zod for tool argument validation. Compatible with Zod v3.25+ but v4.3.5 is latest (Jan 2026). Includes exclusive unions, loose records, improved intersections. **HIGH confidence** |
-
-**Why Zod?**
-- Mandated by MCP SDK (peer dependency)
-- Best-in-class TypeScript integration (automatic type inference)
-- Validation for incoming tool arguments (security & correctness)
-
----
-
-## Build Tools & Bundling
-
-### Bundler
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **tsdown** | **Latest** | TypeScript library bundler | Built on Rolldown (Rust-based), 49% faster than tsup in real-world tests. tsup is no longer actively maintained (author has moved to tsdown). tsdown is ESM-first, handles everything out-of-the-box, and has better type definition generation. Compatible with tsup's main options for easy migration. **MEDIUM-HIGH confidence** |
-
-### Alternatives Considered
-| Bundler | Why Not |
-|---------|---------|
-| **tsup** | No longer actively maintained. Replaced by tsdown. |
-| **esbuild** (direct) | tsdown uses esbuild internally but provides better DX for libraries. |
-| **tsc** (TypeScript compiler) | Slow for bundling; tsdown is significantly faster. |
-| **rollup** (direct) | tsdown wraps Rolldown with better defaults for TypeScript libraries. |
-
-**Build Configuration:**
-```json
-{
-  "type": "module",
-  "scripts": {
-    "build": "tsdown"
-  }
-}
-```
-
-**tsconfig.json** (recommended):
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "moduleResolution": "Node16",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
-  }
-}
-```
-
----
-
-## Testing
-
-### Test Framework
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **Vitest** | **Latest** | Unit & integration testing | 10-20x faster than Jest on large codebases (2026 benchmarks). Browser-native design, out-of-the-box TypeScript & ESM support. Reuses Vite's dev server for lighter footprint. MCP-specific testing tools available (vitest-mcp). Jest 30 (June 2025) improved ESM support but Vitest remains faster and more ergonomic for TypeScript. **HIGH confidence** |
-
-**Why Vitest over Jest?**
-- **Performance**: 10-20x faster on large codebases (Vite integration)
-- **TypeScript**: Native TypeScript support without complex configuration
-- **ESM**: Out-of-the-box ESM support (Jest's ESM is still experimental)
-- **DX**: Better developer experience for modern TypeScript projects
-- **MCP tooling**: MCP-specific Vitest servers available (vitest-mcp, Tony Chu's vitest & type checking server)
-
-**Test Structure:**
 ```typescript
-import { describe, it, expect } from 'vitest';
-
-describe('CalDAV tool', () => {
-  it('fetches upcoming events', async () => {
-    // Test with mocked tsdav client
-  });
-});
+client.createCalendarObject({
+  calendar: DAVCalendar,        // Target calendar
+  iCalString: string,           // Complete iCalendar text (VCALENDAR wrapper)
+  filename: string,             // e.g., "uuid-here.ics"
+  headers?: Record<string, string>,
+  headersToExclude?: string[],
+  fetchOptions?: RequestInit,
+}) => Promise<Response>
 ```
 
----
+**Implementation detail:** Performs HTTP PUT to `new URL(filename, calendar.url).href` with:
+- `Content-Type: text/calendar; charset=utf-8`
+- `If-None-Match: *` (prevents overwriting existing resource -- correct CalDAV create semantics)
 
-## Logging
+#### `updateCalendarObject`
 
-### Logging Library
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **Pino** | **Latest** | Structured logging | 5x faster than Winston, minimal CPU/memory overhead. Structured JSON logging by default. Built-in data redaction (security). **CRITICAL**: For MCP stdio servers, logs MUST go to stderr (pino writes to stdout by default, so configure `destination: process.stderr`). Pino is ideal for high-performance MCP servers. **HIGH confidence** |
-
-**MCP-Specific Logging Configuration:**
 ```typescript
-import pino from 'pino';
-
-const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-  // CRITICAL: stdio servers must log to stderr, not stdout
-  transport: {
-    target: 'pino/file',
-    options: {
-      destination: 2, // stderr (file descriptor 2)
-    },
-  },
-});
+client.updateCalendarObject({
+  calendarObject: DAVCalendarObject,  // Must have url, data (updated), and etag
+  headers?: Record<string, string>,
+  headersToExclude?: string[],
+  fetchOptions?: RequestInit,
+}) => Promise<Response>
 ```
 
-**Why Pino over Winston?**
-- **Performance**: 5x faster than Winston (critical for stdio servers)
-- **Security**: Built-in redaction for sensitive data (passwords, tokens)
-- **Structured**: JSON logging by default (easier to parse/monitor)
-- **Low overhead**: Minimal impact on MCP server performance
+**Implementation detail:** Performs HTTP PUT to `calendarObject.url` with:
+- `Content-Type: text/calendar; charset=utf-8`
+- `If-Match: <etag>` (optimistic concurrency -- correct CalDAV update semantics)
+- Body is `calendarObject.data` (the updated iCalendar string)
 
-**CRITICAL MCP STDIO RULE:**
-- **NEVER write to stdout** (corrupts JSON-RPC messages)
-- **ALWAYS use stderr** for logging (console.error() or pino with destination: stderr)
-- **Logs go to stderr**, protocol messages go to stdout
+**Critical:** The caller must set `calendarObject.data` to the modified iCalendar string before calling `updateCalendarObject`. tsdav does NOT modify the data -- it sends whatever is in `calendarObject.data`.
 
----
+#### `deleteCalendarObject`
 
-## Error Handling
-
-### Error Patterns
-| Pattern | Implementation | Rationale |
-|---------|---------------|-----------|
-| **McpError** | Use for protocol-level errors | MCP SDK's error class with `code`, `message`, `data` fields. Used for connection errors, invalid requests, etc. **HIGH confidence** |
-| **Tool-level errors** | Return `isError: true` in result | Tool errors should be in the result object (visible to LLM), not thrown as McpError. This allows the AI to see and potentially handle the error. **HIGH confidence** |
-| **Zod validation** | Automatic via MCP SDK | Tool arguments validated with Zod schemas before execution. Invalid input returns validation error automatically. **HIGH confidence** |
-
-**Example Tool Error Handling:**
 ```typescript
-server.tool('get-events', async (params) => {
-  try {
-    const events = await calDavClient.fetchCalendarObjects({
-      calendar: params.calendar,
-      timeRange: params.range,
-    });
-    return {
-      content: [{ type: 'text', text: JSON.stringify(events) }],
-    };
-  } catch (error) {
-    // Return error in result (visible to LLM), not as McpError
-    return {
-      isError: true,
-      content: [{
-        type: 'text',
-        text: `Error fetching events: ${error.message}`,
-      }],
-    };
-  }
-});
+client.deleteCalendarObject({
+  calendarObject: DAVCalendarObject,  // Must have url and etag
+  headers?: Record<string, string>,
+  headersToExclude?: string[],
+  fetchOptions?: RequestInit,
+}) => Promise<Response>
 ```
 
-**Key Principles:**
-- **McpError**: Protocol errors (connection closed, invalid method)
-- **isError in result**: Tool errors (CalDAV query failed, invalid calendar)
-- **Log all errors** to stderr, return sanitized messages to AI
-- **Type safety**: Use TypeScript's type system to catch compile-time errors
+**Implementation detail:** Performs HTTP DELETE to `calendarObject.url` with:
+- `If-Match: <etag>` (optimistic concurrency)
 
----
+#### CardDAV equivalents
 
-## HTTP Client
+**Answer: YES.** All three CardDAV write operations are also available:
 
-### Already Provided by Dependencies
-| Technology | Purpose | Rationale |
-|------------|---------|-----------|
-| **cross-fetch** (via tsdav) | HTTP requests | tsdav includes `cross-fetch` (4.1.0) for Node.js & browser compatibility. No additional HTTP client needed. **HIGH confidence** |
-
-**Why Not Add Another HTTP Client?**
-- **tsdav includes cross-fetch**: No need for axios, node-fetch, etc.
-- **Consistency**: Use the same HTTP client as tsdav (simplifies debugging)
-- **Browser compatibility**: cross-fetch works in Node.js and browser (future-proof)
-
----
-
-## Environment Configuration
-
-### Configuration Management
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **dotenv** | **Latest** (if needed) | Environment variables | Standard pattern for Node.js apps. MCP servers typically use env vars for configuration (server URL, credentials). **dotenv optional** if using native `process.env` directly (Node.js 20+ has improved env var support). **MEDIUM confidence** |
-
-**Configuration Pattern:**
 ```typescript
-// Configuration via environment variables
-const config = {
-  caldavUrl: process.env.CALDAV_URL!,
-  caldavUsername: process.env.CALDAV_USERNAME!,
-  caldavPassword: process.env.CALDAV_PASSWORD!,
-  logLevel: process.env.LOG_LEVEL || 'info',
+// Create
+client.createVCard({
+  addressBook: DAVAddressBook,
+  vCardString: string,             // Complete vCard text
+  filename: string,                // e.g., "uuid-here.vcf"
+  headers?, headersToExclude?, fetchOptions?
+}) => Promise<Response>
+
+// Update
+client.updateVCard({
+  vCard: DAVVCard,                 // Must have url, data (updated), and etag
+  headers?, headersToExclude?, fetchOptions?
+}) => Promise<Response>
+
+// Delete
+client.deleteVCard({
+  vCard: DAVVCard,                 // Must have url and etag
+  headers?, headersToExclude?, fetchOptions?
+}) => Promise<Response>
+```
+
+**Implementation mirrors calendar:** createVCard uses `If-None-Match: *`, updateVCard uses `If-Match: <etag>`, deleteVCard uses `If-Match: <etag>`. Content-Type is `text/vcard; charset=utf-8`.
+
+#### Important data model note
+
+`DAVCalendarObject` and `DAVVCard` are both type aliases for `DAVObject`:
+
+```typescript
+type DAVObject = {
+  data?: any;    // iCalendar/vCard string
+  etag?: string; // ETag for concurrency
+  url: string;   // Resource URL on server
 };
+type DAVCalendarObject = DAVObject;
+type DAVVCard = DAVObject;
 ```
 
-**Environment Variables for v1:**
-- `CALDAV_URL`: SabreDAV server URL (e.g., `https://dav.linagora.com`)
-- `CALDAV_USERNAME`: Basic auth username
-- `CALDAV_PASSWORD`: Basic auth password
-- `LOG_LEVEL`: Logging level (debug, info, warn, error)
+For updates, the caller constructs a `DAVCalendarObject`/`DAVVCard` with:
+- `url`: the existing resource URL (from the fetched object)
+- `etag`: the current ETag (from the fetched object)
+- `data`: the MODIFIED iCalendar/vCard string (after applying changes)
 
-**Security Note:**
-- Use HTTPS (required for basic auth)
-- Never log credentials (use Pino's redaction)
-- Consider environment-specific .env files (.env.local, .env.production)
+The existing v1 DTOs already preserve `url`, `etag`, and `_raw` fields for exactly this purpose.
 
 ---
 
-## Code Quality & Linting
+### Q2: Does ical.js support generating/building iCalendar components?
 
-### Linting & Formatting
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **ESLint** | **9.x** | Linting | TypeScript linting with `@typescript-eslint/eslint-plugin` and `@typescript-eslint/parser`. Latest ESLint 9.x (from tsdav's dev dependencies). **HIGH confidence** |
-| **Prettier** | **3.6.2+** | Code formatting | Consistent code style. Integrates with ESLint via `eslint-config-prettier` and `eslint-plugin-prettier`. **HIGH confidence** |
+**Answer: YES.** ical.js is fully bidirectional -- parse AND generate.
 
-**Recommended ESLint Config:**
-- `@typescript-eslint/eslint-plugin` (8.46.2+)
-- `@typescript-eslint/parser` (8.46.2+)
-- `eslint-config-airbnb-typescript` (18.0.0+) or custom config
-- `eslint-config-prettier` (10.1.8+) to avoid conflicts
+**Confidence:** HIGH (verified against installed `ical.js@2.2.1` source code)
 
----
+#### Component construction
 
-## XML Parsing
+```typescript
+import ICAL from 'ical.js';
 
-### XML Parser
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **xml-js** (via tsdav) | **1.6.11** | XML ↔ JSON conversion | tsdav includes `xml-js` for parsing WebDAV PROPFIND/REPORT XML responses. No additional XML parser needed unless you need advanced features. **MEDIUM-HIGH confidence** |
+// Create from scratch
+const vcalendar = new ICAL.Component('vcalendar');
+vcalendar.addPropertyWithValue('version', '2.0');
+vcalendar.addPropertyWithValue('prodid', '-//mcp-twake//EN');
 
-### Alternative (if xml-js insufficient)
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| **fast-xml-parser** | **Latest (v6)** | High-performance XML parsing | If xml-js is too slow or limited, fast-xml-parser is 4x faster (per benchmarks) with TypeScript support, zero dependencies, and handles large files (tested up to 100MB). Only add if xml-js is insufficient. **MEDIUM confidence** |
-
-**Recommendation:** Start with xml-js (included in tsdav). Add fast-xml-parser only if you encounter performance issues or need advanced XML features.
-
----
-
-## Installation Script
-
-### Core Dependencies
-```bash
-# MCP Server
-npm install @modelcontextprotocol/sdk
-
-# CalDAV/CardDAV client
-npm install tsdav
-
-# Data parsing
-npm install ical.js
-
-# vCard parsing (if ical.js vCard support is insufficient)
-# npm install vcard4-ts
-
-# Logging
-npm install pino
-
-# Validation (peer dependency of MCP SDK)
-npm install zod
+const vevent = new ICAL.Component('vevent');
+vcalendar.addSubcomponent(vevent);
 ```
 
-### Dev Dependencies
-```bash
-npm install -D \
-  typescript \
-  tsdown \
-  vitest \
-  @types/node \
-  eslint \
-  @typescript-eslint/eslint-plugin \
-  @typescript-eslint/parser \
-  prettier \
-  eslint-config-prettier
+#### Event helper class (bidirectional)
+
+The `ICAL.Event` class has full getter/setter support:
+
+| Property | Getter | Setter | Value Type |
+|----------|--------|--------|------------|
+| `uid` | Yes | Yes | `string` |
+| `summary` | Yes | Yes | `string` |
+| `description` | Yes | Yes | `string` |
+| `location` | Yes | Yes | `string` |
+| `startDate` | Yes | Yes | `ICAL.Time` |
+| `endDate` | Yes | Yes | `ICAL.Time` |
+| `duration` | Yes | Yes | `ICAL.Duration` |
+| `organizer` | Yes | Yes | `string` |
+| `sequence` | Yes | Yes | `number` |
+| `recurrenceId` | Yes | Yes | `ICAL.Time` |
+| `color` | Yes | Yes | `string` |
+| `attendees` | Yes (array) | No (use component methods) | `ICAL.Property[]` |
+
+**Note:** `endDate` setter automatically removes `duration` property if present, and vice versa.
+
+#### Time creation
+
+```typescript
+// From JavaScript Date
+const time = ICAL.Time.fromJSDate(new Date('2024-03-15T14:00:00Z'), true);
+
+// From data object
+const time = ICAL.Time.fromData({
+  year: 2024, month: 3, day: 15,
+  hour: 14, minute: 0, second: 0,
+  isDate: false  // true for all-day events
+}, zone);
+
+// Current time
+const now = ICAL.Time.now();
+```
+
+#### Recurrence rule creation
+
+```typescript
+// From string
+const rrule = ICAL.Recur.fromString('FREQ=WEEKLY;BYDAY=MO,WE,FR');
+
+// From data object
+const rrule = ICAL.Recur.fromData({
+  freq: 'WEEKLY',
+  interval: 1,
+  byday: ['MO', 'WE', 'FR'],
+  count: 10,    // or until: ICAL.Time
+});
+
+// Serialize back
+rrule.toString(); // "FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=10"
+```
+
+#### Serialization to iCalendar string
+
+```typescript
+// Component.toString() produces valid iCalendar text
+const icalString = vcalendar.toString();
+// Result:
+// BEGIN:VCALENDAR
+// VERSION:2.0
+// PRODID:-//mcp-twake//EN
+// BEGIN:VEVENT
+// ...
+// END:VEVENT
+// END:VCALENDAR
+```
+
+The `ICAL.stringify` module handles:
+- RFC 5545 line folding (75 octets)
+- `\r\n` line endings
+- Value encoding/escaping
+- vCard 3.0 and 4.0 format differences
+
+#### Low-level Component API for arbitrary properties
+
+```typescript
+// Add property with value
+comp.addPropertyWithValue('name', value);
+
+// Update or create
+comp.updatePropertyWithValue('name', value);
+
+// Add Property object (for parameters)
+const prop = new ICAL.Property('attendee');
+prop.setValue('mailto:user@example.com');
+prop.setParameter('cn', 'User Name');
+prop.setParameter('role', 'REQ-PARTICIPANT');
+prop.setParameter('partstat', 'NEEDS-ACTION');
+comp.addProperty(prop);
+
+// Remove
+comp.removeProperty('name');
+comp.removeAllProperties('name');
+comp.removeSubcomponent('vevent');
 ```
 
 ---
 
-## Dependency Tree Summary
+### Q3: Does ical.js support generating/building vCard components?
+
+**Answer: YES.** ical.js handles vCard generation using the same Component/Property API.
+
+**Confidence:** HIGH (verified against installed source -- design.js has full vcard and vcard3 design sets)
+
+#### vCard construction
+
+```typescript
+import ICAL from 'ical.js';
+
+// Create vCard 4.0
+const vcard = new ICAL.Component('vcard');
+vcard.addPropertyWithValue('version', '4.0');
+vcard.addPropertyWithValue('uid', 'uuid-here');
+vcard.addPropertyWithValue('fn', 'John Doe');
+
+// Structured name (N property) - array value
+const nProp = new ICAL.Property('n');
+nProp.setValue(['Doe', 'John', '', '', '']);  // [family, given, middle, prefix, suffix]
+vcard.addProperty(nProp);
+
+// Email with type parameter
+const emailProp = new ICAL.Property('email');
+emailProp.setValue('john@example.com');
+emailProp.setParameter('type', 'work');
+vcard.addProperty(emailProp);
+
+// Phone
+const telProp = new ICAL.Property('tel');
+telProp.setValue('+1234567890');
+telProp.setParameter('type', 'cell');
+vcard.addProperty(telProp);
+
+// Organization
+vcard.addPropertyWithValue('org', 'Example Corp');
+```
+
+#### vCard serialization
+
+```typescript
+const vcardString = vcard.toString();
+// Result:
+// BEGIN:VCARD
+// VERSION:4.0
+// UID:uuid-here
+// FN:John Doe
+// N:Doe;John;;;
+// EMAIL;TYPE=work:john@example.com
+// TEL;TYPE=cell:+1234567890
+// ORG:Example Corp
+// END:VCARD
+```
+
+**Version handling:** The `stringify` module auto-detects vCard 4.0 vs 3.0 based on the VERSION property and applies the correct design set (RFC 6350 vs RFC 2426 encoding rules).
+
+#### Modifying existing vCards
+
+```typescript
+// Parse existing
+const jCardData = ICAL.parse(existingVCardString);
+const vcard = new ICAL.Component(jCardData);
+
+// Modify
+vcard.updatePropertyWithValue('fn', 'Jane Doe');
+vcard.updatePropertyWithValue('org', 'New Corp');
+
+// Remove all emails and re-add
+vcard.removeAllProperties('email');
+const email = new ICAL.Property('email');
+email.setValue('jane@example.com');
+vcard.addProperty(email);
+
+// Serialize back
+const updatedString = vcard.toString();
+```
+
+---
+
+### Q4: Does tsdav support free-busy-query REPORT?
+
+**Answer: YES, but with an important caveat.**
+
+**Confidence:** HIGH (verified against installed source code)
+
+#### Standalone function (NOT on client object)
+
+`freeBusyQuery` is exported from tsdav as a standalone function but is **NOT included** on the object returned by `createDAVClient()`. This means it cannot be called with automatic auth header injection.
+
+**Evidence from source code:**
+- `createDAVClient` return object (line 1598-1628 of tsdav.esm.js): Does NOT include `freeBusyQuery`
+- `DAVClient` class (client.d.ts): Does NOT have a `freeBusyQuery` method
+- `freeBusyQuery` IS exported from `tsdav/calendar` and from the main `tsdav` entry point
+
+#### API signature
+
+```typescript
+import { freeBusyQuery } from 'tsdav';
+
+const result = await freeBusyQuery({
+  url: string,                     // Calendar URL (scheduling outbox or calendar URL)
+  timeRange: {
+    start: string,                 // ISO 8601 (e.g., "2024-01-01T00:00:00Z")
+    end: string,                   // ISO 8601 (e.g., "2024-12-31T23:59:59Z")
+  },
+  depth?: DAVDepth,
+  headers?: Record<string, string>,        // Must manually inject auth headers
+  headersToExclude?: string[],
+  fetchOptions?: RequestInit,
+}) => Promise<DAVResponse>                  // Single response (not array)
+```
+
+#### Implementation detail
+
+The function:
+1. Validates timeRange format (ISO 8601)
+2. Converts to CalDAV format (`YYYYMMDDTHHMMSSZ`)
+3. Sends a REPORT request with `free-busy-query` body in `urn:ietf:params:xml:ns:caldav` namespace
+4. Returns a single `DAVResponse` (the first result from `collectionQuery`)
+
+#### Integration approach
+
+Since `freeBusyQuery` requires manual auth header injection, the implementation must either:
+
+**Option A (Recommended): Import standalone + inject auth headers**
+```typescript
+import { freeBusyQuery } from 'tsdav';
+
+// Reuse the auth header generation logic from the client setup
+const authHeaders = await getAuthHeaders(config);
+const result = await freeBusyQuery({
+  url: calendarUrl,
+  timeRange: { start, end },
+  headers: authHeaders,
+});
+```
+
+**Option B: Use client.davRequest directly**
+```typescript
+// Lower-level but uses the client's built-in auth
+const result = await client.collectionQuery({
+  url: calendarUrl,
+  body: { /* free-busy-query XML */ },
+  defaultNamespace: 'c',  // caldav
+});
+```
+
+**Recommendation:** Option A is simpler and uses the existing tested `freeBusyQuery` XML construction. The auth headers can be extracted from the same `getAuthConfig()` function already used in `src/caldav/client.ts`.
+
+#### Response parsing
+
+The `DAVResponse` returned by `freeBusyQuery` contains the VFREEBUSY component in the response body. The response needs to be parsed to extract free/busy time ranges. The response format is:
 
 ```
-mcp-twake
-├── @modelcontextprotocol/sdk (v1.x) ← MCP server framework
-│   └── zod (4.3.5+) ← Schema validation (peer dependency)
-├── tsdav (2.1.6+) ← CalDAV/CardDAV client
-│   ├── xml-js (1.6.11) ← XML parsing
-│   ├── cross-fetch (4.1.0) ← HTTP client
-│   ├── base-64 (1.0.0) ← Basic auth encoding
-│   └── debug (4.4.3) ← Debugging
-├── ical.js (2.2.1+) ← iCalendar parsing (zero deps)
-├── pino (latest) ← Logging
-└── [Dev Tools]
-    ├── typescript (5.9.x)
-    ├── tsdown (latest)
-    ├── vitest (latest)
-    └── eslint + prettier
+VCALENDAR
+  VFREEBUSY
+    FREEBUSY;FBTYPE=BUSY:20240101T100000Z/20240101T110000Z
+    FREEBUSY;FBTYPE=BUSY:20240101T140000Z/20240101T150000Z
+```
+
+ical.js can parse this response using the same `ICAL.parse()` + `ICAL.Component` API already in use.
+
+**Important server compatibility note:** Not all CalDAV servers support free-busy-query on individual calendar URLs. Some require using the scheduling outbox URL. This should be handled gracefully with a fallback or clear error message.
+
+---
+
+### Q5: UUID generation
+
+**Answer: Use Node.js built-in `crypto.randomUUID()`. No new dependency needed.**
+
+**Confidence:** HIGH
+
+```typescript
+import { randomUUID } from 'node:crypto';
+
+const uid = randomUUID();
+// e.g., "43c98ac2-8493-49b0-95d8-de843d90e6ca"
+```
+
+- Available since Node.js 14.17.0
+- Project requires Node >= 18.0.0 (from package.json `engines`)
+- Generates RFC 4122 v4 UUIDs
+- Cryptographically secure
+- Faster than the `uuid` npm package (no dependency needed)
+
+**CalDAV UID convention:** CalDAV UIDs are typically formatted as `UUID@hostname` or just `UUID`. The generated UUID should be used as-is for the UID property and with `.ics`/`.vcf` extension for the filename:
+
+```typescript
+const uid = randomUUID();
+const filename = `${uid}.ics`;  // For calendar objects
+const filename = `${uid}.vcf`;  // For vCard objects
 ```
 
 ---
 
-## What NOT to Use
+### Q6: New dependencies needed?
 
-### Deprecated or Superseded
-| Technology | Why NOT |
-|------------|---------|
-| **tsup** | No longer maintained; replaced by tsdown |
-| **Jest** | Slower than Vitest for TypeScript; ESM support still experimental |
-| **Winston** | Slower than Pino (5x overhead); less suited for high-performance servers |
-| **node-ical** | Node.js-only; ical.js works in browser too (future-proof) |
-| **dav (lambdabaa)** | Lower-level API undergoing changes; tsdav is more stable |
+**Answer: NONE.** Zero new npm dependencies required.
 
-### Not Needed (Already Included)
-| Technology | Why NOT |
-|------------|---------|
-| **axios / node-fetch** | tsdav includes cross-fetch; no additional HTTP client needed |
-| **xml2js / fast-xml-parser** | tsdav includes xml-js; only add if insufficient |
-| **dotenv** | Optional; Node.js has native env var support (process.env) |
+**Confidence:** HIGH
 
-### Out of Scope for v1
-| Technology | Why NOT (for v1) |
-|------------|------------------|
-| **OAuth libraries** | v1 uses basic auth; OAuth deferred to v2 |
-| **HTTP SSE transport** | v1 is stdio-only; HTTP deferred to future versions |
-| **Database (SQLite, PostgreSQL)** | v1 is stateless read-only; no persistence needed |
-| **Docker** | Not required for v1; can be added later for deployment |
+| Capability | Library | Already in v1? | Notes |
+|------------|---------|----------------|-------|
+| Calendar CRUD | tsdav 2.1.6 | Yes | `createCalendarObject`, `updateCalendarObject`, `deleteCalendarObject` |
+| Contact CRUD | tsdav 2.1.6 | Yes | `createVCard`, `updateVCard`, `deleteVCard` |
+| Free/busy query | tsdav 2.1.6 | Yes | Standalone `freeBusyQuery` export |
+| iCalendar generation | ical.js 2.2.1 | Yes | `Component`, `Event`, `Time`, `Recur`, `stringify` |
+| vCard generation | ical.js 2.2.1 | Yes | Same `Component`/`Property` API, vCard design sets |
+| UUID generation | Node.js `crypto` | Built-in | `crypto.randomUUID()` |
+| ETag handling | tsdav 2.1.6 | Yes | `If-Match` / `If-None-Match` handled automatically |
+| Input validation | zod 4.3.6 | Yes | New schemas for write inputs |
+| Error handling | Existing | Yes | Extend with write-specific error codes |
+| Retry logic | Existing | Yes | `withRetry()` wraps tsdav calls |
 
 ---
 
-## Version Verification Status
+## Recommended Stack (v2 additions)
 
-| Technology | Version | Verification | Confidence |
-|------------|---------|-------------|------------|
-| @modelcontextprotocol/sdk | v1.x | Official GitHub repo (Jan 2026) | HIGH |
-| Node.js | 22.x LTS | Official releases page | HIGH |
-| TypeScript | 5.9.x | Official docs (Jan 21, 2026) | HIGH |
-| tsdav | 2.1.6 | GitHub package.json (Oct 2024) | HIGH |
-| ical.js | 2.2.1 | GitHub releases (Aug 2025) | HIGH |
-| vcard4-ts | Latest | npm (Dec 2025) | MEDIUM-HIGH |
-| Zod | 4.3.5 | npm (Jan 2026) | HIGH |
-| Vitest | Latest | WebSearch + community adoption | HIGH |
-| Pino | Latest | WebSearch + production usage | HIGH |
-| tsdown | Latest | WebSearch + author statements | MEDIUM-HIGH |
+### No New Dependencies
 
----
+The entire v2 feature set is implementable using existing dependencies. This table shows which existing library features are newly utilized:
 
-## Key Architectural Constraints from Stack Choices
+| Technology | Version | New Usage in v2 | Existing in v1? |
+|------------|---------|-----------------|-----------------|
+| tsdav | 2.1.6 | `createCalendarObject`, `updateCalendarObject`, `deleteCalendarObject`, `createVCard`, `updateVCard`, `deleteVCard`, `freeBusyQuery` | Yes (read-only methods) |
+| ical.js | 2.2.1 | `new Component()`, `addPropertyWithValue()`, `updatePropertyWithValue()`, `addSubcomponent()`, `toString()`, `Event` setters, `Recur.fromData()`, `Time.fromJSDate()` | Yes (parse + read only) |
+| Node.js crypto | Built-in | `crypto.randomUUID()` | No (new usage) |
+| zod | 4.3.6 | New schemas for create/update inputs | Yes (config + read schemas) |
 
-### Transport: stdio Only
-- **Logs MUST go to stderr** (pino configuration critical)
-- **No network ports** (security advantage)
-- **Process isolation** (natural security sandbox)
-- **Claude Desktop / CLI integration** (primary use case)
+### Libraries Explicitly NOT Needed
 
-### Authentication: Basic Auth
-- **HTTPS required** (security constraint)
-- **App-specific passwords recommended** (for iCloud, etc.)
-- **Credentials via env vars** (standard pattern)
-- **tsdav basic auth helper** (built-in support)
-
-### Read-Only Operations
-- **No state to persist** (stateless server)
-- **No database needed** (all data from CalDAV server)
-- **Idempotent queries** (safe to retry)
-- **Error handling simpler** (no rollback logic)
-
-### TypeScript Strictness
-- **Zod for runtime validation** (bridge to runtime safety)
-- **ical.js + vcard4-ts types** (type-safe data parsing)
-- **MCP SDK types** (type-safe tool definitions)
-- **strict: true in tsconfig** (catch errors at compile time)
+| Library | Why NOT to add | What to use instead |
+|---------|---------------|-------------------|
+| `uuid` | Node.js has `crypto.randomUUID()` built-in since v14.17 | `import { randomUUID } from 'node:crypto'` |
+| `ical-generator` | ical.js already generates iCalendar; adding a second library creates confusion | `ICAL.Component` + `ICAL.Event` |
+| `vcf` / `vcard-creator` | ical.js already generates vCards | `ICAL.Component` with vCard design set |
+| `xml2js` / `xml-js` | tsdav handles all XML internally; no raw XML needed | tsdav's high-level API |
+| `node-fetch` / `axios` | tsdav uses built-in fetch; no direct HTTP needed | tsdav's `createCalendarObject` etc. |
 
 ---
 
-## Performance Considerations
+## Integration Points with Existing Code
 
-### Why This Stack is Fast
-1. **Pino logging**: 5x faster than Winston, minimal overhead
-2. **Vitest testing**: 10-20x faster than Jest on large codebases
-3. **tsdown bundling**: 49% faster than tsup, Rust-based
-4. **ical.js**: Zero dependencies, optimized parser
-5. **tsdav + cross-fetch**: Efficient HTTP client, minimal overhead
-6. **stdio transport**: No network overhead, direct stdin/stdout
+### 1. CalendarService extension
 
-### Where Bottlenecks May Occur
-1. **CalDAV PROPFIND/REPORT queries**: Network latency to SabreDAV server (unavoidable)
-2. **Large calendar files**: Parsing big .ics files (ical.js handles well)
-3. **Recurrence rule calculation**: RRULE expansion can be CPU-intensive (ical.js optimized for this)
+The existing `CalendarService` class (in `src/caldav/calendar-service.ts`) needs new methods:
 
-**Mitigation Strategies:**
-- Cache parsed calendars/contacts (v2 feature)
-- Limit time ranges for queries (e.g., 1 year max)
-- Use Pino's async logging to avoid blocking
+```typescript
+// New methods to add to CalendarService
+async createEvent(calendar: DAVCalendar, iCalString: string, filename: string): Promise<Response>
+async updateEvent(calendarObject: DAVCalendarObject): Promise<Response>
+async deleteEvent(calendarObject: DAVCalendarObject): Promise<Response>
+```
+
+These wrap `client.createCalendarObject()`, `client.updateCalendarObject()`, `client.deleteCalendarObject()` with retry logic (`withRetry()`) and cache invalidation (clear the affected calendar's cache entry after mutations).
+
+### 2. AddressBookService extension
+
+The existing `AddressBookService` class needs equivalent methods:
+
+```typescript
+async createContact(addressBook: DAVAddressBook, vCardString: string, filename: string): Promise<Response>
+async updateContact(vCard: DAVVCard): Promise<Response>
+async deleteContact(vCard: DAVVCard): Promise<Response>
+```
+
+### 3. New iCalendar builder module
+
+A new module (e.g., `src/builders/event.ts`) should handle constructing valid iCalendar strings:
+
+```typescript
+export function buildCalendarObject(params: {
+  uid: string;
+  summary: string;
+  startDate: Date;
+  endDate: Date;
+  description?: string;
+  location?: string;
+  timezone?: string;
+  recurrenceRule?: string;
+  attendees?: string[];
+}): string   // Returns complete VCALENDAR string
+```
+
+Uses: `ICAL.Component`, `ICAL.Event`, `ICAL.Time.fromJSDate()`, `ICAL.Recur.fromString()`.
+
+### 4. New vCard builder module
+
+A new module (e.g., `src/builders/contact.ts`):
+
+```typescript
+export function buildVCard(params: {
+  uid: string;
+  name: { formatted?: string; given?: string; family?: string };
+  emails?: string[];
+  phones?: string[];
+  organization?: string;
+  version?: '3.0' | '4.0';
+}): string   // Returns complete VCARD string
+```
+
+### 5. Modify-then-serialize pattern for updates
+
+For updates, the pattern is:
+1. Parse `_raw` from the existing DTO using `ICAL.parse()` + `new ICAL.Component()`
+2. Modify properties using `updatePropertyWithValue()` or `Event` setters
+3. Serialize back using `.toString()`
+4. Construct a `DAVCalendarObject` with `{ url, etag, data: modifiedString }`
+5. Call `client.updateCalendarObject({ calendarObject })`
+
+This preserves any properties/extensions not managed by mcp-twake (e.g., VALARM, X-properties).
+
+### 6. freeBusyQuery integration
+
+Since `freeBusyQuery` is not on the client object, the integration needs:
+
+```typescript
+import { freeBusyQuery } from 'tsdav';
+
+// In a new FreeBusyService or as part of CalendarService
+async queryFreeBusy(calendarUrl: string, start: string, end: string): Promise<FreeBusyResult> {
+  const authHeaders = this.getAuthHeaders();  // Extract from config
+  const response = await withRetry(
+    () => freeBusyQuery({
+      url: calendarUrl,
+      timeRange: { start, end },
+      headers: authHeaders,
+    }),
+    this.logger
+  );
+  // Parse VFREEBUSY from response
+  return this.parseFreeBusyResponse(response);
+}
+```
+
+### 7. Cache invalidation after writes
+
+After any successful write (create/update/delete), the CTag-based cache for the affected collection must be invalidated:
+
+```typescript
+// After successful write to a calendar
+this.objectCache.delete(calendar.url);
+
+// Also invalidate the calendar list cache if creating/deleting
+// (CTag will change on the collection)
+```
+
+The existing `CollectionCache.clear()` or per-URL deletion should be extended.
 
 ---
 
-## Migration Path to v2 (Future)
+## Key Technical Details
 
-### When v2 Arrives
-| Upgrade | Strategy |
-|---------|----------|
-| **MCP SDK v2** | Wait for stable release (Q1 2026). Migration guide from v1 → v2 will be provided. Expect breaking changes. |
-| **Node.js 24 LTS** | Migrate when Node.js 22 nears EOL (April 2027). Node.js 24 supported until 2028-04-30. |
-| **OAuth support** | Add OAuth library (e.g., `@badgateway/oauth2-client`) when write operations are introduced. |
-| **HTTP SSE transport** | Add `@modelcontextprotocol/server` HTTP middleware when needed. |
+### ETag concurrency flow
 
----
+```
+Create: PUT with If-None-Match: *  --> 201 Created (or 412 if exists)
+Update: PUT with If-Match: <etag>  --> 204 No Content (or 412 if stale)
+Delete: DELETE with If-Match: <etag> --> 204 No Content (or 412 if stale)
+```
 
-## Sources
+tsdav handles these headers automatically:
+- `createCalendarObject` adds `If-None-Match: *`
+- `updateCalendarObject` adds `If-Match: <etag>` from `calendarObject.etag`
+- `deleteCalendarObject` adds `If-Match: <etag>` from `calendarObject.etag`
 
-### Official Documentation (HIGH confidence)
-- [MCP TypeScript SDK GitHub](https://github.com/modelcontextprotocol/typescript-sdk)
-- [TypeScript 5.9 Release Notes](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-9.html)
-- [Node.js Releases](https://nodejs.org/en/about/previous-releases)
-- [ical.js GitHub](https://github.com/kewisch/ical.js/)
-- [Zod GitHub](https://github.com/colinhacks/zod)
+**412 Precondition Failed** must be caught and surfaced as a conflict error to the MCP client.
 
-### Community Resources (MEDIUM-HIGH confidence)
-- [tsdav npm](https://www.npmjs.com/package/tsdav)
-- [tsdav GitHub](https://github.com/natelindev/tsdav)
-- [vcard4-ts GitHub](https://github.com/MarcelWaldvogel/vcard4-ts)
-- [Pino vs Winston comparison (DEV)](https://dev.to/wallacefreitas/pino-vs-winston-choosing-the-right-logger-for-your-nodejs-application-369n)
-- [Vitest vs Jest 2026 (DEV)](https://dev.to/dataformathub/vitest-vs-jest-30-why-2026-is-the-year-of-browser-native-testing-2fgb)
-- [tsdown vs tsup (Alan Norbauer)](https://alan.norbauer.com/articles/tsdown-bundler/)
-- [MCP stdio best practices (Model Context Protocol docs)](https://modelcontextprotocol.io/docs/develop/build-server)
-- [MCP error handling guide (MCPcat)](https://mcpcat.io/guides/error-handling-custom-mcp-servers/)
+### Response handling
 
-### Verified via WebSearch (Jan 2026)
-- MCP SDK v1.x production-ready status, v2 Q1 2026 timeline
-- Node.js 22 LTS Maintenance phase (supported until April 2027)
-- TypeScript 5.9 stable release (August 2025, docs Jan 2026)
-- tsdav 2.1.6 (Oct 2024) with dependencies
-- Vitest 10-20x faster than Jest (2026 benchmarks)
-- Pino 5x faster than Winston (production data)
-- tsdown replaces tsup (author statements, performance data)
+All write methods return a raw `Response` object (not parsed DAVResponse). The caller must check:
+- `response.ok` for success
+- `response.status` for specific codes (201, 204, 412, etc.)
+- `response.headers.get('etag')` for the new ETag after create/update
+
+### DTSTAMP and LAST-MODIFIED
+
+RFC 5545 requires DTSTAMP on VEVENT. When building or modifying events:
+- Set `DTSTAMP` to current UTC time
+- Update `LAST-MODIFIED` to current UTC time
+- Increment `SEQUENCE` on updates (for scheduling)
 
 ---
 
-## Confidence Assessment
+## Alternatives Considered
 
-| Area | Confidence | Justification |
-|------|------------|---------------|
-| **MCP SDK** | HIGH | Official SDK verified via GitHub, v1.x production status confirmed |
-| **CalDAV/CardDAV (tsdav)** | MEDIUM-HIGH | npm package verified, dependencies confirmed, widely used (35k+ downloads) |
-| **iCalendar (ical.js)** | HIGH | Official GitHub repo, latest release (Aug 2025), zero dependencies, comprehensive features |
-| **vCard (vcard4-ts)** | MEDIUM-HIGH | Recent update (Dec 2025), TypeScript-first, RFC 6350 compliant; ical.js may suffice |
-| **Build tools (tsdown)** | MEDIUM-HIGH | Performance claims verified, author statements, but newer than tsup |
-| **Testing (Vitest)** | HIGH | 2026 benchmarks, MCP-specific tooling, widespread adoption |
-| **Logging (Pino)** | HIGH | Performance data, production usage, MCP stdio compatibility verified |
-| **Error handling** | HIGH | MCP SDK patterns verified, official docs and community guides consistent |
-
-**Overall Stack Confidence:** **HIGH**
-
-All core technologies (MCP SDK, Node.js, TypeScript, tsdav, ical.js, Zod, Vitest, Pino) have been verified via official sources or multiple credible community sources. Version numbers are current as of January 2026.
+| Decision | Chosen | Alternative | Why Not |
+|----------|--------|-------------|---------|
+| UUID generation | `crypto.randomUUID()` | `uuid` npm package | Built-in is faster, zero deps, project requires Node >= 18 |
+| iCalendar generation | ical.js `Component`/`Event` | `ical-generator` npm | Already have ical.js; second library creates confusion |
+| vCard generation | ical.js `Component` | `vcard-creator` npm | Already have ical.js; it supports vCard 3.0 and 4.0 |
+| Free/busy | tsdav `freeBusyQuery` standalone | Raw REPORT via `davRequest` | Standalone function has correct XML construction; just needs auth headers |
+| HTTP client | tsdav (uses built-in fetch) | Direct fetch calls | tsdav handles Content-Type, ETag headers, URL construction |
 
 ---
 
-## Open Questions for Phase Planning
+## Verification Sources
 
-1. **vCard parsing**: Does ical.js's vCard support suffice, or do we need vcard4-ts? Test during Phase 1 (setup).
-2. **XML parsing**: Is tsdav's xml-js sufficient for all CalDAV queries, or do we need fast-xml-parser? Test during Phase 2 (CalDAV integration).
-3. **Error messages**: What level of detail should we expose to the LLM (verbose vs. sanitized)? Define during Phase 3 (tool implementation).
-4. **Caching**: Should v1 cache parsed calendars/contacts, or is that deferred to v2? Decision point during performance testing.
-5. **RRULE expansion**: Do we expand recurring events server-side, or return raw RRULE and let the LLM interpret? Design decision for Phase 4 (event queries).
+All findings were verified against locally installed source code:
+
+| Source | File | Confidence |
+|--------|------|------------|
+| tsdav write methods | `node_modules/tsdav/dist/calendar.d.ts` (lines 63-82) | HIGH |
+| tsdav write implementation | `node_modules/tsdav/dist/tsdav.esm.js` (lines 1074-1107) | HIGH |
+| tsdav CardDAV writes | `node_modules/tsdav/dist/addressBook.d.ts` (lines 38-57) | HIGH |
+| tsdav CardDAV implementation | `node_modules/tsdav/dist/tsdav.esm.js` (lines 718-752) | HIGH |
+| tsdav freeBusyQuery | `node_modules/tsdav/dist/tsdav.esm.js` (lines 1163-1196) | HIGH |
+| tsdav freeBusyQuery NOT on client | `node_modules/tsdav/dist/tsdav.esm.js` (lines 1598-1628) | HIGH |
+| tsdav DAVObject model | `node_modules/tsdav/dist/types/models.d.ts` (lines 33-37) | HIGH |
+| tsdav updateObject If-Match | `node_modules/tsdav/dist/tsdav.esm.js` (lines 287-294) | HIGH |
+| ical.js Component API | `node_modules/ical.js/lib/ical/component.js` (lines 434-587) | HIGH |
+| ical.js Event setters | `node_modules/ical.js/lib/ical/event.js` (lines 349-496) | HIGH |
+| ical.js stringify | `node_modules/ical.js/lib/ical/stringify.js` (lines 31-94) | HIGH |
+| ical.js vCard design set | `node_modules/ical.js/lib/ical/design.js` (lines 918-989) | HIGH |
+| ical.js Time.fromJSDate | `node_modules/ical.js/lib/ical/time.js` (line 247) | HIGH |
+| ical.js Recur.fromData | `node_modules/ical.js/lib/ical/recur.js` (lines 78-80) | HIGH |
+| Node.js crypto.randomUUID | Node.js docs, available since v14.17.0 | HIGH |
+| Existing v1 code | `src/caldav/calendar-service.ts`, `src/caldav/addressbook-service.ts`, `src/transformers/event.ts`, `src/transformers/contact.ts` | HIGH |
 
 ---
 
-**Next Steps:**
-- Use this stack in roadmap creation (phase structure)
-- Validate tsdav + ical.js during Phase 1 (proof of concept)
-- Benchmark performance during Phase 3 (tool implementation)
-- Document any stack deviations in PROJECT.md Key Decisions
+## Roadmap Implications
+
+1. **No dependency changes needed** -- `npm install` is a no-op for v2. This significantly reduces risk.
+
+2. **Existing DTOs are pre-wired for v2** -- Both `EventDTO._raw` and `ContactDTO._raw` already preserve original text, and `etag` + `url` are already stored. The v1 design anticipated write operations.
+
+3. **Phase ordering suggestion:**
+   - Phase 1: iCalendar/vCard builders (pure functions, easily testable)
+   - Phase 2: CalendarService/AddressBookService write methods (thin wrappers around tsdav)
+   - Phase 3: MCP tools for create/update/delete events
+   - Phase 4: MCP tools for create/update/delete contacts
+   - Phase 5: Free/busy query (separate because of auth header complexity)
+
+4. **Key risk: freeBusyQuery auth** -- The standalone function requires manual auth header injection. The existing `getAuthConfig()` in `client.ts` returns tsdav-format auth config, not raw headers. A small helper to extract auth headers is needed.
+
+5. **Key risk: 412 error handling** -- All write operations can fail with 412 Precondition Failed. The existing error handling infrastructure needs extension for conflict detection.

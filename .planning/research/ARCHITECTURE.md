@@ -1,794 +1,923 @@
-# Architecture Patterns: CalDAV/CardDAV MCP Server
+# Architecture: Write Operations & Free/Busy Integration
 
-**Domain:** MCP server for CalDAV/CardDAV protocols
+**Project:** mcp-twake v2
+**Domain:** CalDAV/CardDAV write operations, free/busy queries
 **Researched:** 2026-01-27
 **Confidence:** HIGH
 
 ## Executive Summary
 
-A TypeScript MCP server for CalDAV/CardDAV requires a clean layered architecture separating protocol concerns from MCP tool logic. The recommended structure uses five primary layers: MCP Server (tool registration & request handling), Service Layer (business logic orchestration), CalDAV/CardDAV Client (protocol implementation), Data Transformation (iCal/vCard parsing), and Configuration (connection management). This architecture enables independent evolution of each layer, comprehensive error handling, and straightforward testing.
+Adding write operations to mcp-twake's existing read-only architecture requires changes across four of the six existing layers but introduces no new layers. The existing architecture was designed with write operations in mind -- DTOs already preserve `_raw` iCalendar/vCard text and `etag` values, and the `CollectionCache` already has an `invalidate()` method. The primary new components are: (1) reverse transformers that build iCalendar/vCard strings from tool input parameters, (2) write methods on `CalendarService` and `AddressBookService`, (3) six new MCP tools for CRUD operations, and (4) a `FreeBusyService` or `CalendarService` extension for availability queries. The tsdav library already provides `createCalendarObject`, `updateCalendarObject`, `deleteCalendarObject`, `createVCard`, `updateVCard`, `deleteVCard`, and `freeBusyQuery` -- the existing codebase uses none of these yet.
 
-## Recommended Architecture
+The critical architectural decision is the reverse transformation strategy. For **create** operations, we build new iCalendar/vCard strings using `ICAL.Component` builder API (already a dependency via ical.js). For **update** operations, we parse the existing `_raw` text, modify specific properties via `ICAL.Component.updatePropertyWithValue()`, and re-stringify -- this preserves unknown properties and avoids data loss (v1 research Pitfall 2 & 3). For **delete** operations, no transformation is needed -- tsdav just needs the object URL and ETag.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    MCP Server Layer                         │
-│  - Server initialization (Server class)                     │
-│  - Tool registration (ListToolsRequestSchema)               │
-│  - Request handlers (CallToolRequestSchema)                 │
-│  - stdio transport (StdioServerTransport)                   │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     v
-┌─────────────────────────────────────────────────────────────┐
-│                    Service Layer                            │
-│  - CalendarService (calendar queries, event filtering)      │
-│  - ContactService (contact searches, detail retrieval)      │
-│  - Business logic orchestration                             │
-│  - DTO transformations (domain → MCP response)              │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     v
-┌─────────────────────────────────────────────────────────────┐
-│              CalDAV/CardDAV Client Layer                    │
-│  - DAVClient wrapper (tsdav or ts-caldav)                   │
-│  - WebDAV operations (PROPFIND, REPORT, calendar-query)    │
-│  - Authentication (Basic Auth)                              │
-│  - Connection management & retry logic                      │
-│  - HTTP error handling (4xx, 5xx status codes)             │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     v
-┌─────────────────────────────────────────────────────────────┐
-│              Data Transformation Layer                      │
-│  - iCalendar parsing (ical.js or ts-ics)                   │
-│  - vCard parsing (ical.js or vcardz.ts)                    │
-│  - RFC 5545 → Event DTOs                                    │
-│  - RFC 6350 → Contact DTOs                                  │
-│  - Date/time normalization (timezone handling)              │
-└─────────────────────────────────────────────────────────────┘
+Cache invalidation after writes is mandatory. The write path must call `CollectionCache.invalidate(collectionUrl)` after any successful mutation to ensure subsequent reads fetch fresh data from the server.
 
-┌─────────────────────────────────────────────────────────────┐
-│              Configuration Layer                            │
-│  - Environment variable loading (process.env)               │
-│  - Validation with Zod schemas                              │
-│  - Connection config (server URL, credentials)              │
-│  - Retry policy config                                      │
-└─────────────────────────────────────────────────────────────┘
-```
+---
 
-## Component Boundaries
+## Integration Points with Existing Architecture
 
-| Component | Responsibility | Communicates With | Dependencies |
-|-----------|---------------|-------------------|--------------|
-| **MCP Server** | Registers tools, handles MCP requests, formats responses | Service Layer | @modelcontextprotocol/sdk |
-| **Service Layer** | Orchestrates business logic, applies filters, transforms data | CalDAV Client, Data Transformation | None (pure orchestration) |
-| **CalDAV/CardDAV Client** | Executes WebDAV/CalDAV/CardDAV operations, manages auth | Data Transformation Layer | tsdav or ts-caldav |
-| **Data Transformation** | Parses iCal/vCard, normalizes to TypeScript DTOs | Service Layer | ical.js or ts-ics |
-| **Configuration** | Loads env vars, validates config, provides typed settings | All layers | zod |
-
-### Layer Dependencies (High → Low)
+### Layer-by-Layer Impact Analysis
 
 ```
-MCP Server → Service Layer → CalDAV Client → Data Transformation
-                ↓                                      ↑
-         Configuration ──────────────────────────────┘
+Layer                    | v1 (Read-Only)           | v2 Changes (Write)
+-------------------------|--------------------------|----------------------------------
+Configuration Layer      | Zod env vars, HTTPS      | NO CHANGES
+Logging Layer            | Pino on stderr           | NO CHANGES (writes use same logger)
+Client Layer             | Dual tsdav clients       | NO CHANGES (clients already expose write methods)
+Infrastructure Layer     | Retry, CTag cache        | MINOR: Cache invalidation after writes
+Service Layer            | CalendarService,         | MAJOR: New write methods on both services
+                         | AddressBookService       | NEW: FreeBusyService or CalendarService.freeBusy()
+Transformation Layer     | Forward transformers     | MAJOR: New reverse transformers
+                         | (iCal -> DTO)            | (tool params -> iCal/vCard strings)
+MCP Tool Layer           | 9 read-only tools        | MAJOR: 6-7 new write/query tools
+Entry Point              | createServer() factory   | MINOR: No structural changes needed
 ```
 
-## Data Flow
+### Existing Components That Enable Writes (Already Built)
 
-### Calendar Query Flow (e.g., "What's on my schedule today?")
+1. **`_raw` field on EventDTO and ContactDTO** -- Preserves original iCalendar/vCard text for round-tripping. This was explicitly designed for v2 write operations (see `src/types/dtos.ts` line 51: "CRITICAL: Complete original iCalendar text for write operations in v2").
 
-1. **MCP Server receives tool call**
-   - Tool: `query_events`
-   - Input: `{ query: "today" }` (natural language or structured date range)
+2. **`etag` field on EventDTO and ContactDTO** -- Stores HTTP ETag for optimistic concurrency. Already extracted from `davObject.etag` during transformation.
 
-2. **Service Layer processes request**
-   - CalendarService.queryEvents(dateRange)
-   - Parses "today" → { start: Date, end: Date }
-   - Determines which calendar(s) to query
+3. **`url` field on EventDTO and ContactDTO** -- Stores CalDAV object URL. Required by tsdav's `updateCalendarObject` and `deleteCalendarObject` which take `{ url, data, etag }`.
 
-3. **CalDAV Client executes protocol operations**
-   - Fetches available calendars (cached if recently fetched)
-   - Executes calendar-query REPORT with time-range filter
-   - Returns raw iCalendar (.ics) data
+4. **`CollectionCache.invalidate(collectionUrl)`** -- Already exists in `src/caldav/cache.ts` (line 106). Purpose: "Remove cached entry for a collection." Ready for write-path cache invalidation.
 
-4. **Data Transformation parses iCalendar**
-   - ical.js parses RFC 5545 format
-   - Extracts VEVENT components
-   - Normalizes timezones, recurrence rules (RRULE)
-   - Returns Event DTOs
+5. **`withRetry()` utility** -- Already wraps async operations with exponential backoff. Write operations should use this for network resilience.
 
-5. **Service Layer post-processes**
-   - Filters events by additional criteria (keyword, attendee)
-   - Sorts by start time
-   - Formats for MCP response
+6. **`DAVClientType`** -- The tsdav client type already includes `createCalendarObject`, `updateCalendarObject`, `deleteCalendarObject`, `createVCard`, `updateVCard`, `deleteVCard`, and `freeBusyQuery` methods. No new client initialization needed.
 
-6. **MCP Server formats response**
-   - Converts Event DTOs to structured text
-   - Returns `{ content: [{ type: "text", text: formattedEvents }] }`
+---
 
-### Contact Lookup Flow (e.g., "Find email for Marie Dupont")
+## New Components Needed
 
-1. **MCP Server receives tool call**
-   - Tool: `search_contacts`
-   - Input: `{ name: "Marie Dupont" }`
+### 1. Reverse Transformers (`src/transformers/`)
 
-2. **Service Layer processes request**
-   - ContactService.searchContacts(name)
-   - May use fuzzy matching for name variations
+#### `src/transformers/event-builder.ts` (NEW FILE)
 
-3. **CardDAV Client executes protocol operations**
-   - Fetches addressbook(s)
-   - Executes addressbook-query with filter (or fetches all vCards)
-   - Returns raw vCard (.vcf) data
+Builds iCalendar strings from tool input parameters. Two modes:
 
-4. **Data Transformation parses vCard**
-   - ical.js or vcardz.ts parses RFC 6350 format
-   - Extracts FN (formatted name), EMAIL, TEL, ORG properties
-   - Returns Contact DTOs
-
-5. **Service Layer filters and ranks**
-   - Matches name against FN/N properties
-   - Ranks by match quality
-   - Returns top matches
-
-6. **MCP Server formats response**
-   - Formats contact details as readable text
-   - Returns structured response
-
-## Tool Design: Mapping Use Cases to MCP Tools
-
-Based on the 8 use cases in PROJECT.md, here's the recommended tool structure:
-
-### Calendar Tools (5 tools)
-
-| Tool Name | Use Case | Inputs | CalDAV Operation |
-|-----------|----------|--------|------------------|
-| `list_calendars` | "Quels calendriers ai-je ?" | None | PROPFIND on calendar-home-set |
-| `get_next_event` | "Quel est mon prochain rendez-vous ?" | `calendar?: string` | calendar-query REPORT (start: now, limit: 1) |
-| `get_events_today` | "Qu'est-ce que j'ai aujourd'hui ?" | `calendar?: string` | calendar-query REPORT (time-range: today) |
-| `query_events` | "Quels sont mes RDV cette semaine ?" | `start: string, end: string, calendar?: string` | calendar-query REPORT (time-range filter) |
-| `search_events` | "Quand est ma réunion avec Pierre ?" | `query: string, start?: string, end?: string` | calendar-query REPORT + text filtering |
-
-### Contact Tools (3 tools)
-
-| Tool Name | Use Case | Inputs | CardDAV Operation |
-|-----------|----------|--------|-------------------|
-| `search_contacts` | "Quel est l'email de Marie Dupont ?" | `name: string` | addressbook-query + name matching |
-| `get_contact` | "Donne-moi les coordonnees de LINAGORA" | `name: string` | addressbook-query + full vCard retrieval |
-| `list_contacts` | "Liste mes contacts recents" | `limit?: number` | PROPFIND on addressbook(s) |
-
-### Tool Registration Pattern
+**Create mode:** Build a complete VCALENDAR/VEVENT from scratch using `ICAL.Component` builder API.
 
 ```typescript
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: "query_events",
-        description: "Query calendar events within a date range",
-        inputSchema: {
-          type: "object",
-          properties: {
-            start: {
-              type: "string",
-              description: "Start date (ISO 8601 or 'today', 'tomorrow', 'this week')"
-            },
-            end: {
-              type: "string",
-              description: "End date (ISO 8601 or relative)"
-            },
-            calendar: {
-              type: "string",
-              description: "Optional calendar name/ID to query (defaults to all)"
-            },
-            query: {
-              type: "string",
-              description: "Optional keyword to filter events (searches summary, description, location)"
-            }
-          },
-          required: ["start", "end"]
-        }
-      },
-      // ... other tools
-    ]
-  };
-});
-```
-
-### Tool Handler Pattern
-
-```typescript
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
-  try {
-    switch (name) {
-      case "query_events": {
-        const validated = QueryEventsSchema.parse(args);
-        const events = await calendarService.queryEvents({
-          start: parseDate(validated.start),
-          end: parseDate(validated.end),
-          calendar: validated.calendar,
-          keyword: validated.query
-        });
-        return {
-          content: [{
-            type: "text",
-            text: formatEventsResponse(events)
-          }]
-        };
-      }
-
-      case "search_contacts": {
-        const validated = SearchContactsSchema.parse(args);
-        const contacts = await contactService.searchContacts(validated.name);
-        return {
-          content: [{
-            type: "text",
-            text: formatContactsResponse(contacts)
-          }]
-        };
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
-    }
-  } catch (error) {
-    return {
-      isError: true,
-      content: [{
-        type: "text",
-        text: formatError(error)
-      }]
-    };
-  }
-});
-```
-
-## Error Handling Strategy
-
-### Error Categories
-
-| Category | Examples | Handling Strategy |
-|----------|----------|-------------------|
-| **Network Errors** | Connection timeout, DNS failure, connection refused | Retry with exponential backoff (max 3 attempts), log to stderr, return descriptive error |
-| **Auth Failures** | 401 Unauthorized, 403 Forbidden | No retry, return clear auth error message, log to stderr |
-| **Protocol Errors** | 400 Bad Request, 405 Method Not Allowed, malformed XML | No retry, log full error, return descriptive message |
-| **Parse Errors** | Invalid iCal/vCard, unsupported RRULE, timezone issues | Graceful degradation (skip invalid entries), log warning, return partial results |
-| **Config Errors** | Missing env vars, invalid URL format | Fail fast at startup, clear error message with fix instructions |
-
-### Error Response Pattern
-
-```typescript
-// Structured error response
-return {
-  isError: true,
-  content: [{
-    type: "text",
-    text: JSON.stringify({
-      error: "CalDAVConnectionError",
-      message: "Failed to connect to CalDAV server at https://dav.example.com",
-      details: "Connection timeout after 10s",
-      suggestion: "Check server URL and network connectivity"
-    }, null, 2)
-  }]
-};
-```
-
-### Logging Strategy
-
-```typescript
-// Structured logging to stderr (JSON format)
-interface LogEntry {
-  timestamp: string;
-  level: "debug" | "info" | "warn" | "error";
-  serverName: "mcp-twake";
-  component: string; // "MCP", "CalDAV", "Service", "Transform"
-  method?: string;
-  requestId?: string;
-  message: string;
-  error?: {
-    name: string;
-    message: string;
-    stack?: string; // Only in debug mode
-  };
-  metadata?: Record<string, unknown>;
-}
-
-// Example usage
-logger.error({
-  component: "CalDAV",
-  method: "fetchEvents",
-  requestId: req.id,
-  message: "CalDAV query failed",
-  error: {
-    name: error.name,
-    message: sanitize(error.message) // Remove passwords/tokens
-  },
-  metadata: {
-    calendarUrl: sanitizeUrl(calendar.url),
-    dateRange: { start, end }
-  }
-});
-```
-
-### Retry Logic
-
-```typescript
-// Exponential backoff with jitter
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  options: {
-    maxRetries: number;
-    baseDelay: number; // ms
-    maxDelay: number;  // ms
-    retryableErrors: string[]; // Error codes to retry
-  }
-): Promise<T> {
-  let lastError: Error;
-
-  for (let attempt = 0; attempt <= options.maxRetries; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-
-      // Don't retry auth failures or client errors
-      if (!isRetryable(error, options.retryableErrors)) {
-        throw error;
-      }
-
-      if (attempt < options.maxRetries) {
-        const delay = Math.min(
-          options.baseDelay * Math.pow(2, attempt) + Math.random() * 1000,
-          options.maxDelay
-        );
-        await sleep(delay);
-      }
-    }
-  }
-
-  throw lastError;
-}
-```
-
-## Configuration Management
-
-### Environment Variables
-
-```typescript
-// Required variables
-const ConfigSchema = z.object({
-  CALDAV_SERVER_URL: z.string().url(),
-  CALDAV_USERNAME: z.string().min(1),
-  CALDAV_PASSWORD: z.string().min(1),
-
-  // Optional with defaults
-  CALDAV_TIMEOUT_MS: z.coerce.number().default(10000),
-  CALDAV_MAX_RETRIES: z.coerce.number().default(3),
-  CALDAV_CALENDAR_CACHE_TTL_MS: z.coerce.number().default(300000), // 5 min
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-});
-
-type Config = z.infer<typeof ConfigSchema>;
-
-// Load and validate at startup
-function loadConfig(): Config {
-  try {
-    return ConfigSchema.parse(process.env);
-  } catch (error) {
-    console.error("Configuration error:", error);
-    console.error("\nRequired environment variables:");
-    console.error("  CALDAV_SERVER_URL - CalDAV server URL (e.g., https://dav.linagora.com)");
-    console.error("  CALDAV_USERNAME   - Username for basic auth");
-    console.error("  CALDAV_PASSWORD   - Password for basic auth");
-    process.exit(1);
-  }
-}
-```
-
-### Connection Management
-
-```typescript
-class CalDAVClientManager {
-  private client: DAVClient | null = null;
-  private calendarCache: Map<string, { data: Calendar[]; timestamp: number }> = new Map();
-
-  constructor(private config: Config) {}
-
-  async getClient(): Promise<DAVClient> {
-    if (!this.client) {
-      this.client = new DAVClient({
-        serverUrl: this.config.CALDAV_SERVER_URL,
-        credentials: {
-          username: this.config.CALDAV_USERNAME,
-          password: this.config.CALDAV_PASSWORD,
-        },
-        authMethod: "Basic",
-        defaultAccountType: "caldav",
-      });
-
-      await this.client.login();
-    }
-    return this.client;
-  }
-
-  async getCalendars(forceRefresh = false): Promise<Calendar[]> {
-    const cached = this.calendarCache.get("calendars");
-    if (!forceRefresh && cached && Date.now() - cached.timestamp < this.config.CALDAV_CALENDAR_CACHE_TTL_MS) {
-      return cached.data;
-    }
-
-    const client = await this.getClient();
-    const calendars = await client.fetchCalendars();
-
-    this.calendarCache.set("calendars", {
-      data: calendars,
-      timestamp: Date.now()
-    });
-
-    return calendars;
-  }
-}
-```
-
-## Patterns to Follow
-
-### Pattern 1: Service-Oriented Tool Handlers
-
-**What:** Each MCP tool delegates to a service method rather than implementing logic inline.
-
-**When:** All tool implementations should follow this pattern for testability and separation of concerns.
-
-**Why:** Enables unit testing services without MCP server overhead, allows service reuse across multiple tools, and keeps tool handlers thin (validation + delegation only).
-
-**Example:**
-```typescript
-// Good: Thin handler, delegates to service
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const validated = QueryEventsSchema.parse(request.params.arguments);
-  const events = await calendarService.queryEvents(validated);
-  return { content: [{ type: "text", text: formatEvents(events) }] };
-});
-
-// Bad: Fat handler with inline logic
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const client = new DAVClient(config);
-  await client.login();
-  const calendars = await client.fetchCalendars();
-  const events = await client.fetchCalendarObjects({ /* ... */ });
-  const parsed = events.map(e => ICAL.parse(e.data));
-  // ... 50+ lines of transformation logic
-});
-```
-
-### Pattern 2: DTO-Based Data Flow
-
-**What:** Use strongly-typed DTOs (Data Transfer Objects) at layer boundaries to decouple internal representations.
-
-**When:** Between CalDAV Client → Service Layer and Service Layer → MCP Server.
-
-**Why:** Protocol details (iCal properties) don't leak into service logic, enables independent evolution of each layer, and simplifies testing with mock DTOs.
-
-**Example:**
-```typescript
-// DTOs
-interface EventDTO {
-  uid: string;
+// Conceptual interface -- not final implementation
+interface CreateEventInput {
   summary: string;
+  startDate: string;        // ISO 8601
+  endDate: string;          // ISO 8601
   description?: string;
-  start: Date;
-  end: Date;
   location?: string;
-  attendees: string[];
-  status: "CONFIRMED" | "TENTATIVE" | "CANCELLED";
+  attendees?: string[];     // email addresses
+  timezone?: string;        // IANA timezone ID
+  recurrenceRule?: string;  // RRULE string (e.g., "FREQ=WEEKLY;BYDAY=MO")
 }
 
-interface ContactDTO {
-  uid: string;
-  fullName: string;
-  emails: string[];
-  phones: string[];
+function buildICalString(input: CreateEventInput, uid: string): string {
+  // Uses ICAL.Component builder:
+  // 1. Create vcalendar component
+  // 2. Set VERSION:2.0 and PRODID
+  // 3. Create vevent subcomponent
+  // 4. Set UID, DTSTART, DTEND, SUMMARY, etc.
+  // 5. Add VTIMEZONE if timezone specified
+  // 6. Return ICAL.stringify(comp.jCal)
+}
+```
+
+**Update mode:** Parse existing `_raw`, modify specific properties, re-stringify.
+
+```typescript
+interface UpdateEventInput {
+  summary?: string;
+  startDate?: string;
+  endDate?: string;
+  description?: string;
+  location?: string;
+  // Only provided fields are updated; others preserved from _raw
+}
+
+function updateICalString(rawIcal: string, updates: UpdateEventInput): string {
+  // 1. Parse _raw with ICAL.parse()
+  // 2. Wrap in ICAL.Component
+  // 3. For each provided field: comp.updatePropertyWithValue(name, value)
+  // 4. Update DTSTAMP and LAST-MODIFIED to current time
+  // 5. Increment SEQUENCE number
+  // 6. Return ICAL.stringify(comp.jCal)
+}
+```
+
+**Confidence: HIGH** -- ical.js `ICAL.Component` builder API is verified in official documentation. The library is already a dependency. The `addPropertyWithValue()`, `updatePropertyWithValue()`, and `ICAL.stringify()` methods are documented.
+
+#### `src/transformers/contact-builder.ts` (NEW FILE)
+
+Same pattern for vCard:
+
+```typescript
+interface CreateContactInput {
+  givenName?: string;
+  familyName?: string;
+  formattedName: string;    // Required by vCard spec (FN property)
+  emails?: string[];
+  phones?: string[];
   organization?: string;
 }
 
-// Service layer works with DTOs
-class CalendarService {
-  async queryEvents(params: QueryEventsParams): Promise<EventDTO[]> {
-    const rawEvents = await this.client.fetchCalendarObjects(/* ... */);
-    return rawEvents.map(e => this.transformer.toEventDTO(e));
-  }
+function buildVCardString(input: CreateContactInput, uid: string): string {
+  // Uses ICAL.Component builder:
+  // 1. Create vcard component
+  // 2. Set VERSION:3.0, PRODID, UID
+  // 3. Set FN, N, EMAIL, TEL, ORG properties
+  // 4. Return component.toString()
+}
+
+function updateVCardString(rawVCard: string, updates: UpdateContactInput): string {
+  // 1. Parse _raw with ICAL.parse()
+  // 2. Wrap in ICAL.Component
+  // 3. For each provided field: update property
+  // 4. Update REV timestamp
+  // 5. Return component.toString()
 }
 ```
 
-### Pattern 3: Fail-Fast Configuration Validation
+**Confidence: HIGH** -- ical.js handles both iCalendar and vCard. Mozilla Thunderbird uses `ICAL.Component` for vCard encoding. The `toString()` method outputs vCard format. Verified via Mozilla bug 1639430 and ical.js wiki.
 
-**What:** Validate all configuration at server startup, before connecting to CalDAV server or registering tools.
+**Important note on vCard version:** Build vCard 3.0 by default for maximum server compatibility (SabreDAV, Nextcloud). vCard 4.0 has better encoding (mandatory UTF-8) but less server support. Detect existing version from `_raw` during updates and preserve it.
 
-**When:** First operation in main() function.
+### 2. Service Layer Write Methods
 
-**Why:** Provides immediate, clear feedback on configuration issues rather than failing mysteriously during first tool call.
+#### `CalendarService` Extensions (`src/caldav/calendar-service.ts` -- MODIFIED)
 
-**Example:**
 ```typescript
-async function main() {
-  // 1. Validate config FIRST
-  const config = loadConfig(); // Exits if invalid
+// New methods to add to CalendarService class:
 
-  // 2. Initialize dependencies
-  const logger = createLogger(config.LOG_LEVEL);
-  const client = new CalDAVClientManager(config);
+async createEvent(
+  calendarUrl: string,     // Target calendar URL
+  iCalString: string,      // Built by event-builder
+  filename: string         // e.g., "{uid}.ics"
+): Promise<{ url: string; etag?: string }>;
 
-  // 3. Test connection (optional health check)
-  try {
-    await client.getClient(); // Validates credentials
-  } catch (error) {
-    logger.error("Failed to connect to CalDAV server", { error });
-    process.exit(1);
-  }
+async updateEvent(
+  calendarObject: { url: string; data: string; etag?: string }
+): Promise<{ etag?: string }>;
 
-  // 4. Register tools
-  const server = new Server(/* ... */);
-  registerTools(server, client, config);
-
-  // 5. Start server
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-}
+async deleteEvent(
+  calendarObject: { url: string; etag?: string }
+): Promise<void>;
 ```
 
-### Pattern 4: Graceful Degradation for Parse Errors
+**Implementation details:**
 
-**What:** When parsing iCal/vCard data, skip invalid entries rather than failing entire request.
+- `createEvent`: Calls `this.client.createCalendarObject({ calendar: { url: calendarUrl }, iCalString, filename })`. Wraps in `withRetry()`. After success, calls `this.objectCache.invalidate(calendarUrl)`. Returns parsed response URL and ETag.
 
-**When:** Parsing collections of events or contacts.
+- `updateEvent`: Calls `this.client.updateCalendarObject({ calendarObject })`. The tsdav library automatically adds `If-Match: <etag>` header when `etag` is provided. Wraps in `withRetry()`. After success, invalidates cache for the calendar containing this object.
 
-**Why:** Real-world CalDAV servers may have malformed data from legacy imports or third-party clients.
+- `deleteEvent`: Calls `this.client.deleteCalendarObject({ calendarObject })`. Same ETag handling. Wraps in `withRetry()`. Cache invalidation after success.
 
-**Example:**
+**Cache invalidation strategy:** After any successful write, call `this.objectCache.invalidate(collectionUrl)` where `collectionUrl` is the parent calendar URL. This forces the next read to fetch fresh data from the server. Do NOT try to update the cache in-place -- the server may modify the object (normalize properties, update CTag, change ETag), so only the server has the authoritative version.
+
+**Deriving collection URL from object URL:** Calendar object URLs follow the pattern `{calendarUrl}/{filename}.ics`. Extract the parent by removing the last path segment: `objectUrl.substring(0, objectUrl.lastIndexOf('/') + 1)`.
+
+#### `AddressBookService` Extensions (`src/caldav/addressbook-service.ts` -- MODIFIED)
+
 ```typescript
-function parseEvents(rawEvents: CalendarObject[]): EventDTO[] {
-  const parsed: EventDTO[] = [];
-  const errors: Array<{ uid: string; error: string }> = [];
+// New methods to add to AddressBookService class:
 
-  for (const raw of rawEvents) {
-    try {
-      const ical = ICAL.parse(raw.data);
-      const event = transformToEventDTO(ical);
-      parsed.push(event);
-    } catch (error) {
-      logger.warn("Failed to parse event", {
-        uid: raw.url,
-        error: error.message
-      });
-      errors.push({ uid: raw.url, error: error.message });
-    }
-  }
+async createContact(
+  addressBookUrl: string,
+  vCardString: string,
+  filename: string         // e.g., "{uid}.vcf"
+): Promise<{ url: string; etag?: string }>;
 
-  if (errors.length > 0 && errors.length === rawEvents.length) {
-    // All failed - this is a critical error
-    throw new Error("Failed to parse all events");
-  }
+async updateContact(
+  vCard: { url: string; data: string; etag?: string }
+): Promise<{ etag?: string }>;
 
-  return parsed; // Return partial results
-}
+async deleteContact(
+  vCard: { url: string; etag?: string }
+): Promise<void>;
 ```
 
-### Pattern 5: Structured Error Responses
+**Same patterns as CalendarService** -- `withRetry()`, cache invalidation, ETag-based concurrency.
 
-**What:** Return errors as structured JSON rather than plain text messages.
+#### Free/Busy Query: CalendarService Extension (Recommended)
 
-**When:** All error responses from MCP tools.
+**Recommendation: Add to CalendarService rather than creating a new service.**
 
-**Why:** Enables LLMs to parse error types and suggest appropriate actions, provides context for debugging, and allows future tooling to handle errors programmatically.
+Rationale:
+- Free/busy queries target calendar collections (same scope as CalendarService)
+- tsdav's `freeBusyQuery` is a CalDAV operation, not a separate protocol
+- Creating a separate `FreeBusyService` would add unnecessary indirection
+- The method naturally belongs alongside `fetchEvents` and `listCalendars`
 
-**Example:**
 ```typescript
-interface ErrorResponse {
-  error: string;        // Error type/code
-  message: string;      // Human-readable description
-  details?: string;     // Additional context
-  suggestion?: string;  // What user should do
-  retryable?: boolean;  // Can user retry?
+// New method on CalendarService:
+
+async queryFreeBusy(
+  calendarUrl: string,
+  timeRange: TimeRange
+): Promise<FreeBusyResult> {
+  // 1. Call this.client.freeBusyQuery({ url: calendarUrl, timeRange })
+  // 2. Parse VFREEBUSY response using ICAL.parse()
+  // 3. Extract FREEBUSY periods with FBTYPE (BUSY, BUSY-TENTATIVE, FREE)
+  // 4. Return structured FreeBusyResult
 }
 
-function formatError(error: Error): string {
-  const response: ErrorResponse = {
-    error: error.name,
-    message: error.message,
-    retryable: isRetryableError(error)
-  };
+// New method for multi-calendar free/busy:
 
-  if (error instanceof CalDAVAuthError) {
-    response.suggestion = "Check CALDAV_USERNAME and CALDAV_PASSWORD environment variables";
-  } else if (error instanceof CalDAVNetworkError) {
-    response.suggestion = "Check CALDAV_SERVER_URL and network connectivity";
-    response.retryable = true;
-  }
-
-  return JSON.stringify(response, null, 2);
+async queryAllFreeBusy(timeRange: TimeRange): Promise<FreeBusyResult> {
+  // 1. List all calendars
+  // 2. Query free/busy for each in parallel
+  // 3. Merge results (union of busy periods)
 }
 ```
 
-## Anti-Patterns to Avoid
+**New DTO needed:**
 
-### Anti-Pattern 1: Mixing MCP and Protocol Logic
+```typescript
+interface FreeBusyPeriod {
+  start: Date;
+  end: Date;
+  type: 'BUSY' | 'BUSY-TENTATIVE' | 'BUSY-UNAVAILABLE' | 'FREE';
+}
 
-**What:** Implementing CalDAV/CardDAV operations directly in MCP tool handlers.
+interface FreeBusyResult {
+  periods: FreeBusyPeriod[];
+  calendarUrl?: string;
+  timeRange: TimeRange;
+}
+```
 
-**Why bad:** Makes testing difficult (requires mocking MCP SDK), couples protocol details to MCP request format, prevents service reuse.
+**Important caveat:** tsdav documentation warns "a lot of caldav providers do not support this method like google, apple. use with caution." SabreDAV (the target server for mcp-twake) does support free-busy-query REPORT per RFC 4791 Section 7.10. However, we should implement a fallback: if `freeBusyQuery` returns an error, compute free/busy locally from fetched events by checking TRANSP and STATUS properties.
 
-**Instead:** Use service layer to isolate protocol operations. Tool handlers should only validate input, call service, format response.
+**Confidence: MEDIUM** -- tsdav exposes the API, RFC 4791 defines the protocol, but real-world server support varies. SabreDAV support needs validation during implementation.
 
-### Anti-Pattern 2: Synchronous Blocking Operations
+### 3. New MCP Tools (`src/tools/`)
 
-**What:** Using synchronous HTTP requests or blocking I/O in tool handlers.
+#### Calendar Write Tools
 
-**Why bad:** MCP servers are async by design; blocking operations freeze entire server, timeout issues cascade to all clients.
+| Tool Name | File | Parameters | Service Method |
+|-----------|------|-----------|----------------|
+| `create_event` | `src/tools/calendar/create-event.ts` | summary, startDate, endDate, calendar?, description?, location?, attendees?, recurrenceRule? | CalendarService.createEvent() |
+| `update_event` | `src/tools/calendar/update-event.ts` | uid, calendar?, summary?, startDate?, endDate?, description?, location? | CalendarService.updateEvent() |
+| `delete_event` | `src/tools/calendar/delete-event.ts` | uid, calendar? | CalendarService.deleteEvent() |
+| `check_availability` | `src/tools/calendar/check-availability.ts` | startDate, endDate, calendar? | CalendarService.queryFreeBusy() |
 
-**Instead:** Use async/await throughout. All CalDAV client operations, parsing, and file I/O should be asynchronous.
+#### Contact Write Tools
 
-### Anti-Pattern 3: Throwing Unstructured Errors
+| Tool Name | File | Parameters | Service Method |
+|-----------|------|-----------|----------------|
+| `create_contact` | `src/tools/contacts/create-contact.ts` | formattedName, emails?, phones?, organization?, givenName?, familyName?, addressBook? | AddressBookService.createContact() |
+| `update_contact` | `src/tools/contacts/update-contact.ts` | uid, addressBook?, formattedName?, emails?, phones?, organization? | AddressBookService.updateContact() |
+| `delete_contact` | `src/tools/contacts/delete-contact.ts` | uid, addressBook? | AddressBookService.deleteContact() |
 
-**What:** Throwing raw errors from services/clients without catching and formatting in tool handlers.
+### 4. Tool Registration Updates (`src/tools/index.ts` -- MODIFIED)
 
-**Why bad:** Raw stack traces leak to LLM, unhelpful error messages confuse users, missing context makes debugging difficult.
+The existing `registerAllTools()` function needs to import and call registration functions for the new write tools. No structural changes -- just add more `register*Tool()` calls following the existing pattern.
 
-**Instead:** Catch errors in tool handlers, log full details to stderr with context, return structured error responses to MCP client.
+---
 
-### Anti-Pattern 4: No Connection Reuse
+## Data Flow: Write Path vs Read Path
 
-**What:** Creating new CalDAV client instance for each tool call.
+### Read Path (Existing, Unchanged)
 
-**Why bad:** Wastes time on repeated authentication, exceeds server connection limits under load, adds unnecessary latency.
+```
+MCP Tool Request
+  -> Service.fetch*()
+    -> tsdav.fetchCalendarObjects()
+      -> CalDAV server (REPORT)
+    <- DAVCalendarObject[] (with url, etag, data)
+  -> transformCalendarObject() [iCal -> EventDTO]
+  -> formatEvent() [EventDTO -> text]
+<- MCP Tool Response (text content)
+```
 
-**Instead:** Maintain singleton CalDAVClientManager with connection pooling, reuse authenticated client across tool calls, cache frequently-accessed data (calendars, addressbooks).
+### Write Path: Create Event (New)
 
-### Anti-Pattern 5: Hardcoding Server-Specific Behavior
+```
+MCP Tool Request (summary, startDate, endDate, ...)
+  -> Validate with Zod schema
+  -> Generate UID: crypto.randomUUID()
+  -> buildICalString(input, uid) [tool params -> iCalendar string]
+  -> CalendarService.createEvent(calendarUrl, iCalString, `${uid}.ics`)
+    -> withRetry(() => tsdav.createCalendarObject({
+         calendar: { url: calendarUrl },
+         iCalString,
+         filename: `${uid}.ics`
+       }))
+      -> CalDAV server (PUT with If-None-Match: *)
+    <- HTTP 201 Created (with ETag header)
+    -> objectCache.invalidate(calendarUrl)
+  <- { url, etag }
+  -> Format success response
+<- MCP Tool Response ("Event created: {summary} on {date}")
+```
 
-**What:** Adding special cases for Twake, Nextcloud, etc. based on server detection.
+### Write Path: Update Event (New)
 
-**Why bad:** Violates "must work with any SabreDAV-compatible server" requirement, adds maintenance burden, may break with server updates.
+```
+MCP Tool Request (uid, summary?, startDate?, ...)
+  -> Validate with Zod schema
+  -> LOOKUP PHASE: Find existing event by UID
+    -> CalendarService.fetchEvents() or fetchAllEvents()
+    -> transformCalendarObject() to get EventDTO with _raw, url, etag
+    -> Find event where dto.uid === input.uid
+    -> If not found: return error "Event not found"
+  -> updateICalString(event._raw, updates) [modify existing iCal]
+  -> CalendarService.updateEvent({
+       url: event.url,
+       data: updatedICalString,
+       etag: event.etag
+     })
+    -> withRetry(() => tsdav.updateCalendarObject({
+         calendarObject: { url, data, etag }
+       }))
+      -> CalDAV server (PUT with If-Match: <etag>)
+    <- HTTP 200/204 (with new ETag)
+    OR <- HTTP 412 Precondition Failed (ETag mismatch = conflict)
+    -> objectCache.invalidate(collectionUrl)
+  <- { etag }
+  -> Format success/conflict response
+<- MCP Tool Response ("Event updated" or "Conflict: event was modified by another client")
+```
 
-**Instead:** Adhere strictly to CalDAV (RFC 4791) and CardDAV (RFC 6352) standards, use feature detection rather than server detection, gracefully degrade if optional features missing.
+### Write Path: Delete Event (New)
 
-## Build Order & Dependencies
+```
+MCP Tool Request (uid, calendar?)
+  -> Validate with Zod schema
+  -> LOOKUP PHASE: Find existing event by UID (same as update)
+  -> CalendarService.deleteEvent({
+       url: event.url,
+       etag: event.etag
+     })
+    -> withRetry(() => tsdav.deleteCalendarObject({
+         calendarObject: { url, etag }
+       }))
+      -> CalDAV server (DELETE with If-Match: <etag>)
+    <- HTTP 204 No Content
+    OR <- HTTP 412 Precondition Failed
+    -> objectCache.invalidate(collectionUrl)
+  <- void
+<- MCP Tool Response ("Event deleted: {summary}")
+```
 
-### Phase 1: Foundation (No external dependencies)
+### Query Path: Free/Busy (New)
 
-**Components:**
-- Configuration layer with Zod schemas
-- Logger implementation (stderr, JSON structured logs)
-- TypeScript project setup, tsconfig.json, package.json
+```
+MCP Tool Request (startDate, endDate, calendar?)
+  -> Validate with Zod schema
+  -> CalendarService.queryFreeBusy(calendarUrl, timeRange)
+    -> withRetry(() => tsdav.freeBusyQuery({
+         url: calendarUrl,
+         timeRange: { start, end }
+       }))
+      -> CalDAV server (REPORT: CALDAV:free-busy-query)
+    <- VFREEBUSY iCalendar component
+    -> Parse VFREEBUSY, extract FREEBUSY periods
+  <- FreeBusyResult { periods: FreeBusyPeriod[] }
+  -> Format availability summary
+<- MCP Tool Response ("Busy: 9:00-10:00, 14:00-15:30. Free: 10:00-14:00, 15:30-17:00")
+```
 
-**Why first:** Establishes project structure and ensures all subsequent code can log properly.
+---
 
-**Validation:** Config loads from env vars, validation errors shown clearly, logger writes to stderr.
+## ETag-Based Conflict Detection and Cache Integration
 
-### Phase 2: Data Transformation (Depends on: Phase 1)
+### How ETags Flow Through the System
 
-**Components:**
-- DTO type definitions (EventDTO, ContactDTO, etc.)
-- iCalendar parser integration (ical.js)
-- vCard parser integration (ical.js or vcardz.ts)
-- Transformation functions (iCal → EventDTO, vCard → ContactDTO)
+```
+FETCH:  Server -> tsdav (DAVCalendarObject.etag) -> transformer -> EventDTO.etag
+CREATE: Tool generates UID, no ETag needed -> PUT If-None-Match: *
+UPDATE: EventDTO.etag -> tsdav -> PUT If-Match: <etag> -> Server
+DELETE: EventDTO.etag -> tsdav -> DELETE If-Match: <etag> -> Server
+```
 
-**Why second:** Services and clients need DTOs. Parsing logic can be tested in isolation.
+### ETag Behavior Per Operation
 
-**Validation:** Unit tests parsing sample .ics/.vcf files, edge cases (RRULE, timezones, missing fields) handled.
+| Operation | HTTP Method | ETag Header | Success | Conflict |
+|-----------|-------------|-------------|---------|----------|
+| Create | PUT | `If-None-Match: *` | 201 Created + new ETag | 412 (UID already exists) |
+| Update | PUT | `If-Match: <etag>` | 200/204 + new ETag | 412 (modified since fetch) |
+| Delete | DELETE | `If-Match: <etag>` | 204 No Content | 412 (modified since fetch) |
 
-### Phase 3: CalDAV/CardDAV Client (Depends on: Phases 1-2)
+### tsdav's ETag Handling
 
-**Components:**
-- CalDAVClientManager (connection pooling, caching)
-- Integration with tsdav or ts-caldav library
-- Retry logic with exponential backoff
-- Auth handling (Basic Auth)
-- Raw data fetching (calendars, events, contacts)
+The tsdav library automatically handles `If-Match` / `If-None-Match` headers based on the `etag` field in the provided objects. From the type definitions:
 
-**Why third:** Services depend on client, but client can be tested against real/mock CalDAV server.
+- `updateCalendarObject({ calendarObject: { url, data, etag } })` -- tsdav sends `If-Match: <etag>`
+- `deleteCalendarObject({ calendarObject: { url, etag } })` -- tsdav sends `If-Match: <etag>`
+- `createCalendarObject({ calendar, iCalString, filename })` -- tsdav sends `If-None-Match: *`
 
-**Validation:** Integration tests against SabreDAV test server (dav.linagora.com), auth working, calendars/events/contacts retrieved.
+The lower-level `updateObject` and `deleteObject` functions also accept an explicit `etag?` parameter.
 
-### Phase 4: Service Layer (Depends on: Phases 1-3)
+**Confidence: HIGH** -- Verified from tsdav type declarations (`tsdav.d.ts`) and official documentation.
 
-**Components:**
-- CalendarService (list calendars, query events, filter by date/keyword)
-- ContactService (search contacts, get contact details)
-- Business logic (date parsing, fuzzy matching, sorting)
+### Cache Invalidation Strategy
 
-**Why fourth:** Orchestrates client and transformer, implements use case logic.
+**Rule: Invalidate after every successful write. Never update cache in-place.**
 
-**Validation:** Unit tests with mock client, integration tests with real client, all 8 use cases covered.
+Rationale:
+1. The server may normalize the iCalendar/vCard data (reorder properties, add server-generated fields)
+2. The server updates the collection CTag on every modification
+3. The server assigns a new ETag to the modified/created object
+4. Only the server knows the authoritative state after a write
 
-### Phase 5: MCP Server (Depends on: Phases 1-4)
+**Implementation:**
 
-**Components:**
-- MCP Server initialization (@modelcontextprotocol/sdk)
-- Tool registration (8 tools for use cases)
-- Request handlers (validation, service delegation, response formatting)
-- Error handling and formatting
-- stdio transport setup
+```typescript
+// After ANY successful write operation:
+const collectionUrl = this.getCollectionUrl(objectUrl);
+this.objectCache.invalidate(collectionUrl);
+this.logger.debug({ collectionUrl }, 'Cache invalidated after write');
+```
 
-**Why fifth:** Top layer depends on all others. Can be developed/tested once services are stable.
+**Helper to derive collection URL from object URL:**
 
-**Validation:** MCP client tests (via SDK), tool calls return expected responses, errors formatted correctly.
+```typescript
+private getCollectionUrl(objectUrl: string): string {
+  // CalDAV object URLs: /calendars/user/calendar-name/event.ics
+  // Collection URL:     /calendars/user/calendar-name/
+  const lastSlash = objectUrl.lastIndexOf('/');
+  return objectUrl.substring(0, lastSlash + 1);
+}
+```
 
-### Phase 6: Integration & Polish (Depends on: Phases 1-5)
+**What about the calendar list cache?** The `this.calendars` array in `CalendarService` does NOT need invalidation after event writes. Calendar list changes (new/deleted calendars) are a different concern. Event CRUD only affects the object cache within a calendar.
 
-**Components:**
-- End-to-end tests with Claude Desktop
-- Performance optimization (connection pooling, caching)
-- Documentation (README, examples)
-- Production hardening (health checks, monitoring hooks)
+### Handling 412 Precondition Failed (Conflict)
 
-**Why last:** Validates full stack, identifies integration issues, prepares for production use.
+When the server returns 412, it means the resource was modified since we last fetched it. The MCP tool should:
 
-**Validation:** All 8 use cases work end-to-end, performance acceptable (<2s for typical queries), documentation complete.
+1. Detect the 412 status from tsdav's response
+2. Return a clear error to the LLM: "Conflict: This event was modified by another client since you last viewed it. Please fetch the latest version and try again."
+3. Invalidate the cache so the next read gets fresh data
+4. Do NOT automatically retry (the LLM/user should decide what to do)
+
+Create a typed error class:
+
+```typescript
+// src/errors.ts (MODIFIED)
+export class ConflictError extends Error {
+  constructor(
+    message: string,
+    public readonly objectUrl: string,
+    public readonly staleEtag?: string
+  ) {
+    super(message);
+    this.name = 'ConflictError';
+  }
+}
+```
+
+---
+
+## UID Generation Strategy
+
+**Recommendation: Use `crypto.randomUUID()` from Node.js built-in `crypto` module.**
+
+Rationale:
+- `crypto.randomUUID()` is available in Node.js 14.17.0+ (project requires >= 18.0.0)
+- Generates RFC 4122 v4 UUIDs using CSPRNG
+- No external dependency needed (avoid adding `uuid` package)
+- Returns format: `550e8400-e29b-41d4-a716-446655440000`
+
+**Usage in create operations:**
+
+```typescript
+import { randomUUID } from 'node:crypto';
+
+const uid = randomUUID();
+const filename = `${uid}.ics`;  // CalDAV convention
+```
+
+**Important CalDAV UID rules:**
+- UID MUST be globally unique (RFC 5545 Section 3.8.4.7)
+- UID MUST NOT change after creation (breaks sync)
+- Some servers (Google CalDAV) use the UID as the filename, ignoring the provided filename
+- Best practice: Use UID as filename to ensure consistency
+
+**Confidence: HIGH** -- `crypto.randomUUID()` verified available in Node.js 18+. No dependency needed.
+
+---
+
+## Where Free/Busy Query Fits in the Architecture
+
+### Recommended: CalendarService Extension
+
+```
+src/caldav/calendar-service.ts
+  CalendarService {
+    // Existing read methods:
+    listCalendars()
+    fetchEvents(calendar, timeRange?)
+    fetchEventsByCalendarName(name, timeRange?)
+    fetchAllEvents(timeRange?)
+
+    // New write methods:
+    createEvent(calendarUrl, iCalString, filename)
+    updateEvent(calendarObject)
+    deleteEvent(calendarObject)
+
+    // New query method:
+    queryFreeBusy(calendarUrl, timeRange)
+    queryAllFreeBusy(timeRange)
+  }
+```
+
+### Free/Busy Fallback Strategy
+
+If `freeBusyQuery` is not supported by the server (returns error), implement client-side computation:
+
+```typescript
+async queryFreeBusyFallback(
+  calendarUrl: string,
+  timeRange: TimeRange
+): Promise<FreeBusyResult> {
+  // 1. Fetch all events in timeRange
+  const events = await this.fetchEvents({ url: calendarUrl }, timeRange);
+  // 2. Transform to EventDTOs
+  // 3. Filter: only OPAQUE events (TRANSP !== 'TRANSPARENT')
+  // 4. Filter: only CONFIRMED or TENTATIVE (STATUS !== 'CANCELLED')
+  // 5. Map to FreeBusyPeriod with appropriate FBTYPE
+  // 6. Merge overlapping periods
+}
+```
+
+This fallback means `check_availability` works with any CalDAV server, even those that do not support the free-busy-query REPORT.
+
+### New DTO Location
+
+Add to `src/types/dtos.ts`:
+
+```typescript
+export interface FreeBusyPeriod {
+  start: Date;
+  end: Date;
+  type: 'BUSY' | 'BUSY-TENTATIVE' | 'BUSY-UNAVAILABLE' | 'FREE';
+}
+
+export interface FreeBusyResult {
+  periods: FreeBusyPeriod[];
+  calendarUrl?: string;
+  timeRange: { start: string; end: string };
+}
+```
+
+---
+
+## Entry Point and Tool Registration Changes
+
+### `src/server.ts` -- MINOR CHANGES
+
+No structural changes. The `createServer()` function already accepts `CalendarService` and `AddressBookService` and passes them to `registerAllTools()`. Write tools receive the same service instances.
+
+### `src/tools/index.ts` -- MODIFIED
+
+Add imports and registration calls for new tools:
+
+```typescript
+// New imports:
+import { registerCreateEventTool } from './calendar/create-event.js';
+import { registerUpdateEventTool } from './calendar/update-event.js';
+import { registerDeleteEventTool } from './calendar/delete-event.js';
+import { registerCheckAvailabilityTool } from './calendar/check-availability.js';
+import { registerCreateContactTool } from './contacts/create-contact.js';
+import { registerUpdateContactTool } from './contacts/update-contact.js';
+import { registerDeleteContactTool } from './contacts/delete-contact.js';
+
+// In registerAllTools():
+// Calendar write tools
+registerCreateEventTool(server, calendarService, logger, defaultCalendar);
+registerUpdateEventTool(server, calendarService, logger, defaultCalendar);
+registerDeleteEventTool(server, calendarService, logger, defaultCalendar);
+registerCheckAvailabilityTool(server, calendarService, logger, defaultCalendar);
+
+// Contact write tools
+registerCreateContactTool(server, addressBookService, logger, defaultAddressBook);
+registerUpdateContactTool(server, addressBookService, logger, defaultAddressBook);
+registerDeleteContactTool(server, addressBookService, logger, defaultAddressBook);
+```
+
+### `src/index.ts` -- NO CHANGES
+
+The entry point does not need changes. Services are already initialized and passed to `createServer()`. The write methods will be available on the same service instances.
+
+---
+
+## Recurring Event Strategy for Writes
+
+**Policy: Whole-series operations only for v2.**
+
+The project context specifies "Simple recurring events only (whole series)." This means:
+
+- **Create:** Users can specify an RRULE when creating an event. The RRULE is added to the VEVENT.
+- **Update:** Modifying a recurring event updates the master VEVENT (affects all occurrences). No RECURRENCE-ID support for modifying single occurrences.
+- **Delete:** Deleting a recurring event deletes the entire series (the whole CalDAV object containing the RRULE).
+
+**What this avoids:**
+- RECURRENCE-ID handling (modifying individual occurrences)
+- EXDATE management (excluding specific occurrences)
+- Split series logic (modifying "this and future" occurrences)
+- VTODO recurrence (different rules than VEVENT)
+
+These are deferred to v3+ and represent significant complexity. The ical.js library supports them, but the service and tool layer complexity is high.
+
+---
+
+## Complete File Change Map
+
+### New Files (7)
+
+| File | Purpose | Depends On |
+|------|---------|------------|
+| `src/transformers/event-builder.ts` | Build/update iCalendar strings | ical.js (existing dep) |
+| `src/transformers/contact-builder.ts` | Build/update vCard strings | ical.js (existing dep) |
+| `src/tools/calendar/create-event.ts` | MCP tool: create_event | CalendarService, event-builder |
+| `src/tools/calendar/update-event.ts` | MCP tool: update_event | CalendarService, event-builder |
+| `src/tools/calendar/delete-event.ts` | MCP tool: delete_event | CalendarService |
+| `src/tools/calendar/check-availability.ts` | MCP tool: check_availability | CalendarService |
+| `src/tools/contacts/create-contact.ts` | MCP tool: create_contact | AddressBookService, contact-builder |
+
+**Note:** `update_contact` and `delete_contact` tools could be separate files or combined. Following the existing pattern of one tool per file is recommended.
+
+Additional new tool files:
+| `src/tools/contacts/update-contact.ts` | MCP tool: update_contact | AddressBookService, contact-builder |
+| `src/tools/contacts/delete-contact.ts` | MCP tool: delete_contact | AddressBookService |
+
+### Modified Files (5)
+
+| File | Changes |
+|------|---------|
+| `src/caldav/calendar-service.ts` | Add createEvent(), updateEvent(), deleteEvent(), queryFreeBusy(), queryAllFreeBusy() methods + private getCollectionUrl() |
+| `src/caldav/addressbook-service.ts` | Add createContact(), updateContact(), deleteContact() methods + private getCollectionUrl() |
+| `src/types/dtos.ts` | Add FreeBusyPeriod, FreeBusyResult interfaces, CreateEventInput, UpdateEventInput, CreateContactInput, UpdateContactInput |
+| `src/tools/index.ts` | Import and register 7 new tools |
+| `src/errors.ts` | Add ConflictError class |
+
+### Unchanged Files (17)
+
+| File | Reason |
+|------|--------|
+| `src/index.ts` | Entry point unchanged |
+| `src/server.ts` | Server factory unchanged |
+| `src/config/schema.ts` | No new env vars needed |
+| `src/config/logger.ts` | Logging layer unchanged |
+| `src/caldav/client.ts` | tsdav client already has write methods |
+| `src/caldav/cache.ts` | Cache already has invalidate() |
+| `src/caldav/retry.ts` | Retry utility unchanged |
+| `src/caldav/discovery.ts` | Discovery unchanged |
+| `src/types/index.ts` | Basic types unchanged |
+| `src/types/cache.ts` | Cache types unchanged |
+| `src/transformers/event.ts` | Forward transformer unchanged |
+| `src/transformers/contact.ts` | Forward transformer unchanged |
+| `src/transformers/timezone.ts` | Timezone registration unchanged |
+| `src/transformers/recurrence.ts` | Recurrence expansion unchanged |
+| `src/tools/calendar/utils.ts` | Read utilities unchanged |
+| `src/tools/contacts/utils.ts` | Contact utilities unchanged |
+| All existing tool files | Read tools unchanged |
+
+---
+
+## Suggested Build Order
+
+### Phase A: Reverse Transformers (Foundation for Writes)
+
+**Build first because:** All write tools depend on them. Can be unit tested in isolation with no service/network dependency.
+
+1. `src/transformers/event-builder.ts` -- buildICalString(), updateICalString()
+2. `src/transformers/contact-builder.ts` -- buildVCardString(), updateVCardString()
+3. `src/types/dtos.ts` additions -- CreateEventInput, UpdateEventInput, CreateContactInput, UpdateContactInput, FreeBusyPeriod, FreeBusyResult
+4. `src/errors.ts` additions -- ConflictError
+
+**Test strategy:** Unit tests with known iCal/vCard strings. Parse output with existing forward transformers to verify round-trip fidelity.
+
+### Phase B: Service Layer Write Methods
+
+**Build second because:** Tools depend on services. Services can be tested with mock tsdav clients.
+
+1. `CalendarService.createEvent()`, `updateEvent()`, `deleteEvent()` with cache invalidation
+2. `AddressBookService.createContact()`, `updateContact()`, `deleteContact()` with cache invalidation
+3. Private `getCollectionUrl()` helpers on both services
+4. Conflict detection (412 handling -> ConflictError)
+
+**Test strategy:** Unit tests with mocked tsdav client. Verify cache invalidation calls. Verify ETag propagation.
+
+### Phase C: Calendar Write Tools
+
+**Build third because:** Service methods available. Can be integration-tested against real server.
+
+1. `create_event` tool (simplest write operation)
+2. `delete_event` tool (simpler than update -- no transformation)
+3. `update_event` tool (most complex -- requires lookup + update + conflict handling)
+4. Tool registration in `index.ts`
+
+**Test strategy:** Integration tests against SabreDAV. Verify round-trip: create -> read -> verify.
+
+### Phase D: Contact Write Tools
+
+**Build fourth because:** Same pattern as calendar writes. Can parallelize with Phase C.
+
+1. `create_contact` tool
+2. `delete_contact` tool
+3. `update_contact` tool
+4. Tool registration in `index.ts`
+
+### Phase E: Free/Busy Query
+
+**Build last because:** Independent feature, lower priority than CRUD. Has fallback complexity.
+
+1. `CalendarService.queryFreeBusy()` using tsdav `freeBusyQuery`
+2. `CalendarService.queryFreeBusyFallback()` (local computation from events)
+3. `check_availability` tool with automatic fallback
+4. Tool registration in `index.ts`
 
 ### Dependency Graph
 
 ```
-Phase 1 (Config/Logger)
-    ↓
-Phase 2 (DTOs/Transform) ←┐
-    ↓                     │
-Phase 3 (CalDAV Client) ──┤
-    ↓                     │
-Phase 4 (Services) ───────┘
-    ↓
-Phase 5 (MCP Server)
-    ↓
-Phase 6 (Integration)
+Phase A: Reverse Transformers (no dependencies)
+    |
+    v
+Phase B: Service Write Methods (depends on A)
+    |
+    +--> Phase C: Calendar Write Tools (depends on B)
+    |
+    +--> Phase D: Contact Write Tools (depends on B, parallel with C)
+    |
+    v
+Phase E: Free/Busy Query (independent, can parallelize with C/D)
 ```
 
-**Critical path:** Phase 3 (CalDAV Client) is the riskiest. If tsdav doesn't work with SabreDAV, may need to switch to ts-caldav or implement custom client.
+---
 
-**Parallel work opportunities:**
-- Phase 2 (DTOs) and Phase 3 (Client) can be developed in parallel by different developers
-- Phase 4 service implementations (CalendarService vs ContactService) can be parallelized
+## Anti-Patterns to Avoid
 
-## Scalability Considerations
+### Anti-Pattern 1: Building iCal/vCard Strings with Template Literals
 
-| Concern | At 1 User | At 10 Users | At 100 Users |
-|---------|-----------|-------------|--------------|
-| **Connection pooling** | Single connection sufficient | Keep-alive HTTP agent with maxSockets: 10 | Consider connection pool library, monitor server limits |
-| **Caching** | Simple in-memory Map | TTL-based cache for calendars/addressbooks (5 min) | Add Redis for shared cache across instances |
-| **Rate limiting** | No rate limiting needed | Monitor CalDAV server rate limits | Implement request queuing, backpressure |
-| **Logging** | Stderr with JSON format | Same, add log rotation | Centralized logging (e.g., Loki, Elasticsearch) |
-| **Monitoring** | Manual log inspection | Add health check endpoint | Prometheus metrics, alerting on error rates |
+**What:** Using template strings to construct iCalendar or vCard text.
 
-**Note:** For v1 (read-only, single-user), "At 1 User" column is sufficient. Scalability is a v2+ concern.
+**Why bad:** iCalendar has strict formatting requirements (line folding at 75 octets, property parameter escaping, UTC time format `YYYYMMDDTHHMMSSZ`, CRLF line endings). Manual string building is error-prone and produces non-compliant output.
+
+**Instead:** Use `ICAL.Component` builder API. The library handles all formatting requirements.
+
+### Anti-Pattern 2: Updating Cache In-Place After Writes
+
+**What:** After a successful create/update, inserting the new object into the cache Map.
+
+**Why bad:** The server may normalize the data (reorder properties, add server fields, change CTag). The cached version would be stale immediately. ETag from PUT response may differ from the stored object's actual ETag.
+
+**Instead:** Always invalidate. Let the next read fetch the authoritative version from the server.
+
+### Anti-Pattern 3: Ignoring ETags on Update/Delete
+
+**What:** Sending PUT/DELETE without `If-Match` header.
+
+**Why bad:** Silent data loss. If another client modified the event between fetch and update, the modification is overwritten without warning. This violates CalDAV best practices (RFC 4791 Section 5.3.4) and is a data safety issue.
+
+**Instead:** Always send ETags. The existing DTOs already store `etag`. tsdav handles `If-Match` automatically when `etag` is provided.
+
+### Anti-Pattern 4: Modifying Single Recurring Event Occurrences in v2
+
+**What:** Trying to add RECURRENCE-ID support for per-occurrence modifications.
+
+**Why bad:** Enormous complexity: requires creating exception VEVENTs, managing EXDATE lists, handling "this and future" splits, resolving conflicts between master and exception. Affects read path too (expansion must check for overridden occurrences).
+
+**Instead:** v2 supports whole-series operations only. Single occurrence modification is v3+ scope.
+
+### Anti-Pattern 5: Auto-Retrying on 412 Conflict
+
+**What:** Automatically re-fetching and retrying the write when a 412 Precondition Failed occurs.
+
+**Why bad:** The update may have been intentionally made by another user/client. Auto-retry could overwrite their changes. The LLM/user should be informed of the conflict and decide what to do.
+
+**Instead:** Return a clear `ConflictError` to the MCP tool, which formats it as an actionable message to the LLM.
+
+---
+
+## Architecture Diagram: v2 Complete System
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         MCP Tool Layer                                   │
+│                                                                          │
+│  READ TOOLS (v1, unchanged):       WRITE TOOLS (v2, new):               │
+│  - get_next_event                  - create_event                        │
+│  - get_todays_schedule             - update_event                        │
+│  - get_events_daterange            - delete_event                        │
+│  - search_events                   - check_availability                  │
+│  - list_calendars                  - create_contact                      │
+│  - search_contacts                 - update_contact                      │
+│  - get_contact_details             - delete_contact                      │
+│  - list_contacts                                                         │
+│  - list_addressbooks                                                     │
+│                                                                          │
+└────────────────┬──────────────────────────────┬──────────────────────────┘
+                 │ (read path)                  │ (write path)
+                 v                              v
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Service Layer                                     │
+│                                                                          │
+│  CalendarService:                    AddressBookService:                  │
+│    READ:                               READ:                             │
+│    - listCalendars()                   - listAddressBooks()              │
+│    - fetchEvents()                     - fetchContacts()                 │
+│    - fetchAllEvents()                  - fetchAllContacts()              │
+│    WRITE (new):                        WRITE (new):                      │
+│    - createEvent()                     - createContact()                 │
+│    - updateEvent()                     - updateContact()                 │
+│    - deleteEvent()                     - deleteContact()                 │
+│    QUERY (new):                                                          │
+│    - queryFreeBusy()                                                     │
+│    - queryAllFreeBusy()                                                  │
+│                                                                          │
+│    [All writes call objectCache.invalidate() after success]              │
+│                                                                          │
+└────────────────┬──────────────────────────────┬──────────────────────────┘
+                 │                              │
+                 v                              v
+┌────────────────────────────┐   ┌────────────────────────────────────────┐
+│  Forward Transformers (v1) │   │  Reverse Transformers (v2, new)        │
+│  iCal -> EventDTO          │   │  CreateEventInput -> iCalendar string  │
+│  vCard -> ContactDTO       │   │  EventDTO._raw + updates -> iCal      │
+│  RRULE expansion           │   │  CreateContactInput -> vCard string    │
+│  Timezone registration     │   │  ContactDTO._raw + updates -> vCard   │
+│                            │   │  VFREEBUSY -> FreeBusyResult          │
+└────────────────────────────┘   └────────────────────────────────────────┘
+                 │                              │
+                 v                              v
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Infrastructure Layer                                   │
+│                                                                          │
+│  CollectionCache<T>:              withRetry():                           │
+│  - get(), set()                   - Exponential backoff                  │
+│  - isFresh() [CTag check]        - 3 attempts max                       │
+│  - invalidate() [USED BY WRITES] - Jitter for thundering herd           │
+│  - clear()                                                               │
+│                                                                          │
+└────────────────────────────────┬─────────────────────────────────────────┘
+                                 │
+                                 v
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    tsdav Client Layer                                     │
+│                                                                          │
+│  READ (v1):                        WRITE (v2, newly used):               │
+│  - fetchCalendars()                - createCalendarObject()              │
+│  - fetchCalendarObjects()          - updateCalendarObject()              │
+│  - fetchAddressBooks()             - deleteCalendarObject()              │
+│  - fetchVCards()                   - createVCard()                       │
+│  - isCollectionDirty()             - updateVCard()                       │
+│                                    - deleteVCard()                       │
+│                                    - freeBusyQuery()                     │
+│                                                                          │
+│  [All methods already available on DAVClientType]                         │
+│  [Auth headers injected via Custom authFunction]                         │
+│                                                                          │
+└────────────────────────────────┬─────────────────────────────────────────┘
+                                 │
+                                 v
+                    ┌────────────────────────┐
+                    │   CalDAV/CardDAV Server │
+                    │   (SabreDAV compatible) │
+                    └────────────────────────┘
+```
+
+---
+
+## Confidence Assessment
+
+| Area | Confidence | Notes |
+|------|------------|-------|
+| tsdav write API signatures | HIGH | Verified from tsdav.d.ts type declarations and official documentation |
+| ical.js Component builder | HIGH | Verified from ical.js wiki, used by Mozilla Thunderbird for vCard encoding |
+| ETag/If-Match handling | HIGH | RFC 4791 Section 5.3.4, tsdav auto-injects headers, SabreDAV guide confirms |
+| Cache invalidation strategy | HIGH | CollectionCache.invalidate() already exists, pattern is standard |
+| crypto.randomUUID() | HIGH | Node.js 14.17.0+, project requires Node >= 18.0.0 |
+| Free/busy query support | MEDIUM | tsdav provides API, RFC defines protocol, but server support varies. SabreDAV support needs validation. Fallback strategy mitigates risk. |
+| Recurring event writes | MEDIUM | Whole-series operations straightforward. Per-occurrence would be HIGH complexity but is explicitly out of scope. |
+
+---
 
 ## Sources
 
 ### Official Documentation (HIGH Confidence)
-- [MCP TypeScript SDK - GitHub](https://github.com/modelcontextprotocol/typescript-sdk) - Official SDK architecture and patterns
-- [MCP SDK Documentation](https://modelcontextprotocol.io/docs/sdk) - Official SDK documentation
-- [MCP Example Servers](https://modelcontextprotocol.io/examples) - Reference implementations
-- [RFC 4791 - CalDAV](https://datatracker.ietf.org/doc/html/rfc4791) - CalDAV protocol specification
-- [RFC 6352 - CardDAV](https://www.rfc-editor.org/rfc/rfc6352.html) - CardDAV protocol specification
+- [tsdav type declarations (tsdav.d.ts)](https://app.unpkg.com/tsdav@2.1.6/files/dist/tsdav.d.ts) -- Write operation function signatures
+- [tsdav: createCalendarObject docs](https://tsdav.vercel.app/docs/caldav/createCalendarObject) -- Parameters, return type, example
+- [tsdav: updateCalendarObject docs](https://tsdav.vercel.app/docs/caldav/updateCalendarObject) -- ETag-based update
+- [tsdav: deleteCalendarObject docs](https://tsdav.vercel.app/docs/caldav/deleteCalendarObject) -- ETag-based delete
+- [tsdav: createVCard docs](https://tsdav.vercel.app/docs/carddav/createVCard) -- vCard creation
+- [tsdav: freeBusyQuery docs](https://tsdav.vercel.app/docs/caldav/freeBusyQuery) -- Free/busy query with caveat about provider support
+- [RFC 4791 Section 5.3.4: Calendar Object Resource Entity Tag](https://icalendar.org/CalDAV-Access-RFC-4791/5-3-4-calendar-object-resource-entity-tag.html) -- ETag requirements
+- [RFC 4791 Section 7.10: free-busy-query REPORT](https://icalendar.org/CalDAV-Access-RFC-4791/7-10-caldav-free-busy-query-report.html) -- Free/busy protocol
+- [SabreDAV: Building a CalDAV Client](https://sabre.io/dav/building-a-caldav-client/) -- PUT with If-Match, ETag handling
+- [ical.js wiki: Creating basic iCalendar](https://github.com/mozilla-comm/ical.js/wiki/Creating-basic-iCalendar) -- Component builder API
+- [ical.js API documentation](https://kewisch.github.io/ical.js/api/) -- Full API reference
+- [Node.js crypto.randomUUID()](https://nodejs.org/api/crypto.html) -- UUID generation, Node 14.17.0+
 
-### Library Documentation (HIGH Confidence)
-- [tsdav - GitHub](https://github.com/natelindev/tsdav) - TypeScript WebDAV/CalDAV/CardDAV client
-- [ts-caldav - GitHub](https://github.com/KlautNet/ts-caldav) - TypeScript CalDAV client
-- [ical.js - GitHub](https://github.com/kewisch/ical.js) - iCalendar and vCard parser
-- [SabreDAV - Building a CalDAV Client](https://sabre.io/dav/building-a-caldav-client/) - Protocol implementation guide
-- [SabreDAV - Building a CardDAV Client](https://sabre.io/dav/building-a-carddav-client/) - Protocol implementation guide
-
-### Best Practices & Patterns (MEDIUM-HIGH Confidence)
-- [How to Build MCP Servers with TypeScript SDK - DEV Community](https://dev.to/shadid12/how-to-build-mcp-servers-with-typescript-sdk-1c28) - Concrete implementation patterns
-- [MCP Server Best Practices for 2026 - CData](https://www.cdata.com/blog/mcp-server-best-practices-2026) - 2026-specific guidance
-- [Error Handling in MCP Servers - MCPcat](https://mcpcat.io/guides/error-handling-custom-mcp-servers/) - Error handling patterns
-- [MCP Best Practices - Architecture Guide](https://modelcontextprotocol.info/docs/best-practices/) - Architecture patterns
-- [Dynamic Configuration for MCP Servers - DEV Community](https://dev.to/saleor/dynamic-configuration-for-mcp-servers-using-environment-variables-2a0o) - Environment variable patterns
-- [MCP Server Logging Guide - MCP Manager](https://mcpmanager.ai/blog/mcp-logging/) - Logging best practices
-- [Layered Architecture Pattern in TypeScript - Software Patterns](https://softwarepatternslexicon.com/patterns-js/5/1/1/) - Layered architecture patterns
-- [Building Resilient APIs with Node.js - Medium](https://medium.com/@erickzanetti/building-resilient-apis-with-node-js-47727d38d2a9) - Retry and resilience patterns
+### Verified via Multiple Sources (MEDIUM-HIGH Confidence)
+- [DAVx5 Technical Information](https://manual.davx5.com/technical_information.html) -- ETag/sync-token patterns in practice
+- [Mozilla Bug 1639430: Use ICAL.js to parse and encode vCard](https://bugzilla.mozilla.org/show_bug.cgi?id=1639430) -- ical.js vCard builder usage in Thunderbird
+- [tsdav GitHub Issues #138: Sync Calendar Issue](https://github.com/natelindev/tsdav/issues/138) -- Real-world write operation patterns and edge cases
+- [RFC 6638 Section 3.2.10: Avoiding Conflicts](https://icalendar.org/CalDAV-Scheduling-RFC-6638/3-2-10-avoiding-conflicts-when-updating-scheduling-object-resources.html) -- Conflict avoidance patterns
 
 ### Community Resources (MEDIUM Confidence)
-- [FastMCP - GitHub](https://github.com/punkpeye/fastmcp) - Alternative MCP framework
-- [mcp-server-starter-ts - GitHub](https://github.com/alexanderop/mcp-server-starter-ts) - Starter template
-- [CalDAV calendar-query REPORT - iCalendar.org](https://icalendar.org/CalDAV-Access-RFC-4791/7-8-caldav-calendar-query-report.html) - Protocol examples
+- [MDN: crypto.randomUUID()](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID) -- Browser and Node.js availability
+- [DAViCal: Free Busy](https://wiki.davical.org/index.php/Free_Busy) -- Server-side free/busy implementation notes

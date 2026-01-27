@@ -1,384 +1,754 @@
-# Feature Landscape: CalDAV/CardDAV MCP Server
+# Feature Landscape: v2 Write Operations & Free/Busy
 
-**Domain:** Calendar and Contact Management via CalDAV/CardDAV
+**Domain:** CalDAV/CardDAV Write Operations, Free/Busy Queries via MCP
 **Researched:** 2026-01-27
+**Milestone:** v2 -- Write Operations & Free/Busy
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This research examines the feature landscape for a read-only v1 CalDAV/CardDAV MCP server targeting 8 core use cases. The analysis draws from RFC specifications (4791, 6352), existing MCP server implementations, SabreDAV capabilities, and MCP best practices to categorize features as table stakes, differentiators, or anti-features.
+This research examines the feature landscape for adding write operations (create/update/delete events and contacts) and free/busy availability queries to an existing read-only MCP server. The analysis draws from RFC 4791/6352 specifications, tsdav library type signatures, existing CalDAV MCP implementations (dominik1001/caldav-mcp, nspady/google-calendar-mcp), MCP tool annotation specifications, and the existing mcp-twake v1 codebase.
 
-**Key Finding:** Success requires balancing protocol completeness (CalDAV/CardDAV standards) with MCP-native AI assistant usability. Table stakes = reliable query operations with natural language support. Differentiators = intelligent context filtering and sovereign infrastructure positioning. Anti-features = premature write operations and over-complicated tool APIs.
+**Key Finding:** Write operations in CalDAV/CardDAV are fundamentally PUT/DELETE with ETag-based optimistic concurrency control. The main challenges are: (1) constructing valid iCalendar/vCard data from AI-provided parameters, (2) preserving existing data during updates by modifying the raw _raw text in-place, and (3) guiding AI behavior through tool descriptions and MCP annotations rather than code-level confirmation enforcement. Free/busy queries are a standard CalDAV REPORT but have inconsistent server support; a client-side fallback is recommended.
+
+---
 
 ## Table Stakes
 
-Features users expect from a CalDAV/CardDAV MCP server. Missing any = product feels incomplete or broken.
+Features users expect when write operations are advertised. Missing any of these makes the write capability feel broken or dangerous.
 
-| Feature | Why Expected | Complexity | Dependencies | Notes |
-|---------|--------------|------------|--------------|-------|
-| **Calendar Query by Time Range** | Core CalDAV capability, required for "today's schedule" and "this week" queries | Medium | RFC 4791 time-range filter, timezone handling | Must support CALDAV:calendar-query REPORT with start/end parameters. Handles "next event", "today", "date range" use cases. |
-| **Event Search by Keyword** | Users expect semantic search ("meeting with Pierre") | Medium | Text search across SUMMARY, DESCRIPTION, LOCATION fields | Required for "search events" use case. Should search attendee names as well. |
-| **List Available Calendars** | Multi-calendar users need to know what calendars exist | Low | PROPFIND on calendar home, parse displayname | Table stakes for multi-calendar environments (work/personal/team). |
-| **Contact Search by Name** | Primary contact lookup method | Medium | CardDAV addressbook-query with text filter | Required for "email of Marie Dupont" use case. Must handle partial name matching. |
-| **Contact Details Retrieval** | Users need full vCard data (email, phone, address) | Low | GET or REPORT with full vCard properties | Required for "contact details" use case. Parse vCard 3.0/4.0 formats. |
-| **List Contacts** | Basic contact browsing | Low | CardDAV addressbook-query with no filter | Required for "list contacts" use case. Should support pagination for large address books. |
-| **Basic Auth Configuration** | Standard SabreDAV auth method | Low | None | Environment variables for server URL, username, password. stdio transport only. |
-| **Recurring Event Handling** | ~30% of calendar events are recurring | High | RRULE parsing, timezone-aware expansion | Must correctly expand RRULE within query time ranges. See RFC 5545 section 3.8.5.3. |
-| **Timezone Support** | Calendar events meaningless without correct timezone | High | VTIMEZONE parsing, floating time handling | Must handle TZID parameters, UTC conversion, floating dates. Critical for international users. |
-| **Multi-Calendar Query** | Users with work/personal calendars expect unified queries | Medium | Query multiple calendar collections, merge results | "What's my schedule today?" should check all calendars unless filtered. |
-| **Error Messages for AI** | LLMs need structured failures to retry intelligently | Medium | isError flag pattern, schema hints | MCP best practice: return `{isError: true, content: "descriptive error"}` not JSON-RPC errors. |
-| **ETag/CTag Change Detection** | Avoid re-downloading unchanged data | Low | Store CTags, conditional requests | Performance: check calendar CTag before full sync. SabreDAV standard capability. |
+### Event CRUD
 
-### Why These Are Table Stakes
+| Feature | Why Expected | Complexity | Dependencies | Req ID |
+|---------|--------------|------------|--------------|--------|
+| **create_event** | Core write operation. "Schedule a meeting tomorrow at 2pm" | Medium | iCalendar generation (ical.js), tsdav.createCalendarObject, calendar resolution | CALW-01 |
+| **update_event** | Modify existing events. "Move my 2pm meeting to 3pm" | High | Fetch existing _raw, modify in-place with ical.js, tsdav.updateCalendarObject, ETag concurrency | CALW-02 |
+| **delete_event** | Remove events. "Cancel my meeting with Pierre" | Low | tsdav.deleteCalendarObject, ETag-based If-Match | CALW-03 |
+| **ETag-based conflict detection** | Prevent overwriting concurrent changes. Critical for data safety | Medium | Store ETags from read operations, send If-Match on PUT/DELETE | INF (implicit) |
+| **AI-guided confirmation** | Tool descriptions instruct AI to confirm with user before mutating. "I will create an event titled 'Meeting' on Jan 28 at 2pm. Shall I proceed?" | Low | Tool description text only, no code enforcement | -- |
 
-**Query capabilities** (time-range, search, list) map 1:1 to the 8 validated use cases. Without these, the server can't fulfill its stated purpose.
+### Contact CRUD
 
-**Recurring events and timezones** are non-negotiable: ~30% of calendar events use RRULE, and timezone bugs make calendars unusable. These are "invisible" features - users only notice when they're broken.
+| Feature | Why Expected | Complexity | Dependencies | Req ID |
+|---------|--------------|------------|--------------|--------|
+| **create_contact** | Add new contacts. "Add Pierre Dupont, email pierre@example.com" | Medium | vCard generation (ical.js), tsdav.createVCard, addressbook resolution | CONW-01 |
+| **update_contact** | Modify contacts. "Update Pierre's phone number to +33..." | High | Fetch existing _raw, modify in-place, tsdav.updateVCard, ETag concurrency | CONW-02 |
+| **delete_contact** | Remove contacts. "Delete the contact for Pierre Dupont" | Low | tsdav.deleteVCard | CONW-03 |
 
-**Multi-calendar support** is expected by all modern calendar users. Single-calendar-only tools feel outdated.
+### Free/Busy
 
-**AI-friendly errors** are MCP-specific table stakes. Generic errors ("Connection failed") prevent LLMs from recovering gracefully.
+| Feature | Why Expected | Complexity | Dependencies | Req ID |
+|---------|--------------|------------|--------------|--------|
+| **get_freebusy** | Check availability. "Am I free tomorrow at 2pm?" | Medium | tsdav.freeBusyQuery or client-side computation fallback | ADV-01 |
+
+### Infrastructure for Writes
+
+| Feature | Why Expected | Complexity | Dependencies |
+|---------|--------------|------------|--------------|
+| **MCP tool annotations** | Mark write tools with `destructiveHint: true`, `readOnlyHint: false` | Low | MCP SDK ToolAnnotations support (confirmed available) |
+| **Cache invalidation after writes** | CTag cache becomes stale after PUT/DELETE | Low | Clear affected calendar/addressbook cache entry |
+| **Consistent calendar/addressbook parameter** | Write tools use same resolution pattern as read tools | Low | Existing resolveCalendarEvents / resolveAddressBookContacts patterns |
+
+---
+
+## Tool Specifications
+
+### create_event
+
+**Tool name:** `create_event`
+
+**Description (for AI):**
+```
+Create a new calendar event. IMPORTANT: Before creating, summarize the event
+details (title, date, time, duration, location, attendees) and ask the user
+to confirm. Only call this tool after the user explicitly confirms.
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `title` | string | YES | Event title/summary |
+| `start` | string | YES | Start date/time. ISO 8601 or natural language ("tomorrow at 2pm", "2026-02-01T14:00:00") |
+| `end` | string | NO | End date/time. ISO 8601 or natural language. Defaults to 1 hour after start |
+| `description` | string | NO | Event description/notes |
+| `location` | string | NO | Event location |
+| `attendees` | string | NO | Comma-separated list of attendee emails |
+| `calendar` | string | NO | Calendar name. Uses default calendar resolution (same as read tools) |
+| `allDay` | boolean | NO | If true, creates all-day event (DATE format, no time) |
+| `recurrence` | string | NO | RRULE string for recurring events. Examples: "FREQ=WEEKLY;COUNT=10", "FREQ=DAILY;UNTIL=20260301T000000Z" |
+
+**MCP Annotations:**
+```typescript
+{
+  title: "Create Calendar Event",
+  readOnlyHint: false,
+  destructiveHint: false, // Creates new data, does not destroy existing
+  idempotentHint: false,  // Calling twice creates two events
+  openWorldHint: true     // Interacts with external CalDAV server
+}
+```
+
+**CalDAV Operation:** `PUT` with `If-None-Match: *` to new `.ics` URL. Uses `tsdav.createCalendarObject({ calendar, iCalString, filename })`.
+
+**Output format:**
+```
+Event created successfully:
+  Title: Team Meeting
+  When: Tue Jan 28, 2:00 PM - 3:00 PM (Europe/Paris)
+  Calendar: Work
+  UID: generated-uuid-123@mcp-twake
+```
+
+**Implementation notes:**
+- Generate UID: `crypto.randomUUID() + '@mcp-twake'`
+- Generate filename: `{uid}.ics`
+- Build iCalendar using ical.js `ICAL.Component` (not string templates -- escaping is error-prone)
+- Parse `start`/`end` with chrono-node (reuse existing natural language date parsing)
+- Default end = start + 1 hour if not provided
+- Include VTIMEZONE component if timezone known
+- Set PRODID to `-//mcp-twake//mcp-twake//EN`
+- For recurring events: set RRULE property on VEVENT
+
+**Complexity:** Medium. iCalendar construction requires careful property formatting, but ical.js handles escaping and serialization.
+
+---
+
+### update_event
+
+**Tool name:** `update_event`
+
+**Description (for AI):**
+```
+Update an existing calendar event. Requires the event UID (obtainable from
+search_events or get_events_in_range). IMPORTANT: Before updating, show the
+user what will change and ask for confirmation. Only call this tool after the
+user explicitly confirms the changes.
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `uid` | string | YES | Event UID to update (from previous read operation) |
+| `title` | string | NO | New event title |
+| `start` | string | NO | New start date/time |
+| `end` | string | NO | New end date/time |
+| `description` | string | NO | New description (pass empty string to clear) |
+| `location` | string | NO | New location (pass empty string to clear) |
+| `attendees` | string | NO | New comma-separated attendee emails (replaces all existing) |
+| `calendar` | string | NO | Calendar containing the event. Uses default resolution |
+| `recurrence` | string | NO | New RRULE (replaces existing). Pass empty string to remove recurrence |
+
+**MCP Annotations:**
+```typescript
+{
+  title: "Update Calendar Event",
+  readOnlyHint: false,
+  destructiveHint: true,  // Modifies existing data
+  idempotentHint: true,   // Same update applied twice = same result
+  openWorldHint: true
+}
+```
+
+**CalDAV Operation:** `PUT` with `If-Match: "<etag>"` to existing `.ics` URL. Uses `tsdav.updateCalendarObject({ calendarObject: { url, data, etag } })`.
+
+**Output format:**
+```
+Event updated successfully:
+  Title: Team Meeting (Updated)
+  When: Tue Jan 28, 3:00 PM - 4:00 PM (Europe/Paris)
+  Changed: start time, end time
+```
+
+**Implementation notes:**
+- CRITICAL: Fetch current event by UID first, get the `_raw` iCalendar text and `etag`
+- Parse `_raw` with ical.js to get VCALENDAR component
+- Modify only the changed properties on the existing VEVENT
+- Preserve ALL existing properties (VALARM, X-properties, ATTENDEE parameters, etc.)
+- Re-serialize with ical.js `component.toString()`
+- Send PUT with `If-Match` header containing current ETag
+- Handle 412 Precondition Failed (concurrent modification) with clear error
+- For recurring events: modifies the entire series (no RECURRENCE-ID exception handling in v2)
+
+**Complexity:** High. The modify-in-place pattern requires careful preservation of unknown properties. This is the riskiest write operation.
+
+---
+
+### delete_event
+
+**Tool name:** `delete_event`
+
+**Description (for AI):**
+```
+Delete a calendar event. Requires the event UID (obtainable from search_events
+or get_events_in_range). IMPORTANT: This action is irreversible. Before deleting,
+confirm with the user by showing the event details. For recurring events, this
+deletes the entire series.
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `uid` | string | YES | Event UID to delete |
+| `calendar` | string | NO | Calendar containing the event. Uses default resolution |
+
+**MCP Annotations:**
+```typescript
+{
+  title: "Delete Calendar Event",
+  readOnlyHint: false,
+  destructiveHint: true,   // Permanently removes data
+  idempotentHint: true,    // Deleting already-deleted = no-op (404 is acceptable)
+  openWorldHint: true
+}
+```
+
+**CalDAV Operation:** `DELETE` with `If-Match: "<etag>"` on `.ics` URL. Uses `tsdav.deleteCalendarObject({ calendarObject: { url, etag } })`.
+
+**Output format:**
+```
+Event deleted successfully:
+  Title: Team Meeting
+  Was scheduled: Tue Jan 28, 2:00 PM - 3:00 PM
+```
+
+**Implementation notes:**
+- Fetch event by UID first to get URL, ETag, and event details (for confirmation display)
+- Send DELETE with `If-Match` to prevent deleting a concurrently modified event
+- Handle 404 Not Found gracefully (already deleted)
+- Handle 412 Precondition Failed (event was modified since last read)
+- For recurring events: deletes entire series (all occurrences)
+- Invalidate CTag cache for affected calendar
+
+**Complexity:** Low. DELETE is the simplest WebDAV operation.
+
+---
+
+### create_contact
+
+**Tool name:** `create_contact`
+
+**Description (for AI):**
+```
+Create a new contact in the address book. IMPORTANT: Before creating, summarize
+the contact details (name, email, phone, organization) and ask the user to
+confirm.
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | YES | Full name (used for both FN and N properties) |
+| `email` | string | NO | Email address |
+| `phone` | string | NO | Phone number |
+| `organization` | string | NO | Organization/company name |
+| `addressbook` | string | NO | Address book name. Uses default resolution |
+
+**MCP Annotations:**
+```typescript
+{
+  title: "Create Contact",
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: true
+}
+```
+
+**CardDAV Operation:** `PUT` with `If-None-Match: *` to new `.vcf` URL. Uses `tsdav.createVCard({ addressBook, vCardString, filename })`.
+
+**Output format:**
+```
+Contact created successfully:
+  Name: Pierre Dupont
+  Email: pierre@example.com
+  Phone: +33 1 23 45 67 89
+  Organization: LINAGORA
+  Address Book: Contacts
+```
+
+**Implementation notes:**
+- Generate UID: `crypto.randomUUID()`
+- Generate filename: `{uid}.vcf`
+- Build vCard using ical.js ICAL.Component('vcard')
+- Set required properties: VERSION (3.0 for max compatibility), FN, N, UID
+- Parse `name` into structured N components (given/family) with simple heuristic (last word = family, rest = given)
+- Set EMAIL, TEL, ORG if provided
+- Serialize with ical.js
+
+**Complexity:** Medium. vCard generation is simpler than iCalendar, but N property structuring requires heuristics.
+
+---
+
+### update_contact
+
+**Tool name:** `update_contact`
+
+**Description (for AI):**
+```
+Update an existing contact. Requires the contact UID (obtainable from
+search_contacts or list_contacts). IMPORTANT: Before updating, show the user
+what will change and ask for confirmation.
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `uid` | string | YES | Contact UID to update |
+| `name` | string | NO | New full name |
+| `email` | string | NO | New email (replaces first email, or adds if none) |
+| `phone` | string | NO | New phone (replaces first phone, or adds if none) |
+| `organization` | string | NO | New organization (pass empty string to clear) |
+| `addressbook` | string | NO | Address book containing the contact. Uses default resolution |
+
+**MCP Annotations:**
+```typescript
+{
+  title: "Update Contact",
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: true,
+  openWorldHint: true
+}
+```
+
+**CardDAV Operation:** `PUT` with `If-Match: "<etag>"`. Uses `tsdav.updateVCard({ vCard: { url, data, etag } })`.
+
+**Output format:**
+```
+Contact updated successfully:
+  Name: Pierre Dupont
+  Email: pierre.new@example.com (changed)
+  Phone: +33 1 23 45 67 89
+  Organization: LINAGORA
+```
+
+**Implementation notes:**
+- CRITICAL: Fetch current contact by UID, get `_raw` vCard text and `etag`
+- Parse `_raw` with ical.js
+- Modify only changed properties, preserve ALL unknown properties (X-properties, PHOTO, ADR, etc.)
+- When updating FN, also update N components
+- Re-serialize and PUT with `If-Match`
+- Handle 412 Precondition Failed
+
+**Complexity:** High. Same modify-in-place challenge as update_event. vCard property preservation is critical (see v1 PITFALLS.md Pitfall 2).
+
+---
+
+### delete_contact
+
+**Tool name:** `delete_contact`
+
+**Description (for AI):**
+```
+Delete a contact from the address book. Requires the contact UID (obtainable
+from search_contacts or list_contacts). IMPORTANT: This action is irreversible.
+Before deleting, confirm with the user by showing the contact details.
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `uid` | string | YES | Contact UID to delete |
+| `addressbook` | string | NO | Address book containing the contact. Uses default resolution |
+
+**MCP Annotations:**
+```typescript
+{
+  title: "Delete Contact",
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: true,
+  openWorldHint: true
+}
+```
+
+**CardDAV Operation:** `DELETE` with `If-Match`. Uses `tsdav.deleteVCard({ vCard: { url, etag } })`.
+
+**Output format:**
+```
+Contact deleted successfully:
+  Name: Pierre Dupont
+  Was in: Contacts address book
+```
+
+**Implementation notes:**
+- Fetch contact by UID first for details and ETag
+- DELETE with `If-Match`
+- Handle 404 (already deleted) and 412 (concurrent modification)
+- Invalidate CTag cache for affected address book
+
+**Complexity:** Low.
+
+---
+
+### get_freebusy
+
+**Tool name:** `get_freebusy`
+
+**Description (for AI):**
+```
+Check calendar availability for a time range. Returns busy/free status without
+exposing event details (privacy-preserving). Useful for scheduling: "Am I free
+tomorrow at 2pm?" or "When am I available this week?"
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `start` | string | YES | Start of time range. ISO 8601 or natural language ("tomorrow at 2pm") |
+| `end` | string | YES | End of time range. ISO 8601 or natural language ("tomorrow at 5pm") |
+| `calendar` | string | NO | Calendar to check. Uses default resolution. Use "all" for all calendars |
+
+**MCP Annotations:**
+```typescript
+{
+  title: "Check Availability (Free/Busy)",
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true
+}
+```
+
+**CalDAV Operation:** `REPORT` with `CALDAV:free-busy-query` (RFC 4791 Section 7.10). Uses `tsdav.freeBusyQuery({ url, timeRange, depth })`. Falls back to client-side computation from events if server does not support the REPORT.
+
+**Output format:**
+```
+Availability for Tue Jan 28, 2:00 PM - 5:00 PM (Europe/Paris):
+
+  2:00 PM - 3:00 PM: BUSY
+  3:00 PM - 3:30 PM: BUSY (tentative)
+  3:30 PM - 5:00 PM: FREE
+
+Summary: 1.5 hours busy, 1.5 hours free
+```
+
+**Implementation notes:**
+- Try `tsdav.freeBusyQuery()` first (server-side REPORT)
+- If server returns error (many SabreDAV instances do not enable the Schedule plugin), fall back to client-side computation:
+  1. Fetch events in the time range using existing `fetchAllEvents(timeRange)`
+  2. Filter to OPAQUE events (not TRANSPARENT)
+  3. Compute free/busy intervals by subtracting busy periods from the total range
+  4. Return synthesized VFREEBUSY-style output
+- Parse response VFREEBUSY component for FREEBUSY properties
+- Map FBTYPE values: BUSY, BUSY-TENTATIVE, BUSY-UNAVAILABLE, FREE (inferred)
+- SabreDAV requires the Schedule plugin for server-side free-busy. Known issue: error 500 if calendar default timezone is empty string
+
+**Complexity:** Medium. The dual-path (server-side vs client-side fallback) adds complexity but ensures broad compatibility.
+
+---
+
+## Confirmation Pattern: AI-Guided via Tool Descriptions
+
+### Design Decision
+
+**Approach:** Tool descriptions guide AI to confirm with user before mutations. No code-level enforcement (no confirmation parameter, no two-step flow).
+
+**Rationale from PROJECT.md:** "Tool descriptions guide AI to confirm with user before mutations (no code enforcement)." This keeps tools composable and simple. The AI is responsible for the human-in-the-loop behavior, not the tool implementation.
+
+### How It Works
+
+1. **Tool description** includes explicit instruction: "IMPORTANT: Before [action], summarize [details] and ask the user to confirm."
+2. **MCP tool annotations** mark write tools with `destructiveHint: true` and `readOnlyHint: false`, signaling to MCP clients that these tools modify state.
+3. **MCP clients** (Claude Desktop, etc.) may use annotations to show confirmation dialogs. The MCP spec says clients "SHOULD present confirmation prompts to the user for operations."
+
+### What We Do NOT Do
+
+- No `confirmed: boolean` parameter on write tools (violates composability)
+- No server-side confirmation token/nonce system (over-engineering)
+- No "dry run" mode that previews changes without executing (unnecessary complexity for v2)
+
+### MCP Annotation Support
+
+The installed MCP SDK (verified in `node_modules/@modelcontextprotocol/sdk`) supports `ToolAnnotations` with:
+- `readOnlyHint: boolean` -- signal read-only tools
+- `destructiveHint: boolean` -- signal destructive tools
+- `idempotentHint: boolean` -- signal idempotent tools
+- `openWorldHint: boolean` -- signal external interaction
+
+The `server.tool()` method accepts annotations as the 4th parameter:
+```typescript
+server.tool(name, description, paramsSchema, annotations, callback)
+```
+
+### Annotation Strategy
+
+| Tool | readOnlyHint | destructiveHint | idempotentHint | openWorldHint |
+|------|-------------|----------------|----------------|---------------|
+| All v1 read tools | true | false | true | true |
+| create_event | false | false | false | true |
+| update_event | false | true | true | true |
+| delete_event | false | true | true | true |
+| create_contact | false | false | false | true |
+| update_contact | false | true | true | true |
+| delete_contact | false | true | true | true |
+| get_freebusy | true | false | true | true |
+
+**Note:** `create_*` tools use `destructiveHint: false` because they add new data without modifying or removing existing data. `update_*` and `delete_*` use `destructiveHint: true` because they modify or remove existing data.
+
+---
+
+## Calendar/Addressbook Parameter for Write Tools
+
+### Design Decision
+
+**Same resolution pattern as read tools.** Write tools accept an optional `calendar` / `addressbook` parameter with identical semantics:
+
+1. Parameter provided and != "all" -- target specific calendar/addressbook by display name
+2. Parameter absent + default configured via `DAV_DEFAULT_CALENDAR` / `DAV_DEFAULT_ADDRESSBOOK` -- use default
+3. Parameter absent + no default -- for create: use first discovered calendar/addressbook; for update/delete: search across all
+
+### Implementation
+
+Reuse existing `resolveCalendarEvents()` pattern from `src/tools/calendar/utils.ts`, but adapt for write operations:
+
+- **create_event:** Resolve target calendar. If no calendar specified and no default, use first calendar from `listCalendars()`.
+- **update_event / delete_event:** Need to find the event by UID. Search across resolved calendar(s) to find the event URL and ETag.
+- **create_contact:** Resolve target addressbook. If none specified and no default, use first addressbook.
+- **update_contact / delete_contact:** Find contact by UID across resolved addressbook(s).
+
+### Finding Events/Contacts by UID
+
+Write tools require finding existing objects by UID. This needs a new service method:
+
+```typescript
+// CalendarService
+async findEventByUid(uid: string, calendarName?: string): Promise<{
+  event: EventDTO;
+  calendar: DAVCalendar;
+} | null>
+
+// AddressBookService
+async findContactByUid(uid: string, addressBookName?: string): Promise<{
+  contact: ContactDTO;
+  addressBook: DAVAddressBook;
+} | null>
+```
+
+These methods search the specified (or all) calendars/addressbooks, transform objects to DTOs, and return the first match by UID. The DTO includes `url`, `etag`, and `_raw` needed for PUT/DELETE.
+
+---
 
 ## Differentiators
 
-Features that set mcp-twake apart from competitors. Not expected by default, but provide competitive advantage.
+Features that go beyond basic CRUD to provide competitive advantage.
 
 | Feature | Value Proposition | Complexity | Dependencies | Notes |
 |---------|-------------------|------------|--------------|-------|
-| **Sovereign Infrastructure Focus** | Positions against Google/Microsoft, aligns with LINAGORA/Twake mission | Low | Marketing/documentation only | Explicit positioning: "Your calendar data never leaves your infrastructure." Target Nextcloud/Twake/sovereign platform users. |
-| **SabreDAV Compatibility Testing** | Tested against real SabreDAV (not just Google/Apple) | Medium | dav.linagora.com test server | Differentiates from Google/Apple-only MCP servers. Validates against Nextcloud, Zimbra, Twake. |
-| **Natural Language Date Parsing** | Users can say "next Tuesday" not "2026-02-03" | Medium | date-fns or similar library | Google Calendar MCP has this. Improves AI assistant UX significantly. Examples: "tomorrow", "next week", "end of month". |
-| **Contact Organization Search** | Search contacts by company/organization field | Low | CardDAV query on ORG property | Enables "list contacts at LINAGORA" queries. Most MCP servers ignore ORG field. |
-| **Event Attendee Filtering** | "Show meetings with Pierre" across all events | Medium | Parse ATTENDEE properties, filter results | Goes beyond keyword search - semantic attendee queries. |
-| **Smart Context Filtering** | Only return relevant properties to LLM, reduce token usage | Medium | Property filtering in REPORT requests | Request only SUMMARY, DTSTART, DTEND for listings. Full data only when needed. Saves tokens, improves latency. |
-| **Free/Busy Query** | "Am I free at 2pm?" without exposing full schedule | Medium | CALDAV:free-busy-query REPORT | Privacy-preserving availability check. Useful for scheduling assistants. |
-| **Read-Only Safety Guarantees** | Explicit "no write operations" promise | Low | Omit PUT/POST/DELETE from code | v1 differentiator: "Safe to connect - cannot modify your data." Builds trust for initial adoption. |
-| **Batch Query Optimization** | Use calendar-multiget for efficient multi-event fetch | Medium | CALDAV:calendar-multiget REPORT | Fetches 20 events in 1 request instead of 20. Performance differentiator for "this week" queries. |
-| **AGPL-3.0 Licensing** | Open source sovereign alternative | Low | License file only | Differentiates from proprietary MCP servers. LINAGORA standard, ensures modifications are shared. |
+| **Preserve unknown properties on update** | No data loss during updates. VALARM, X-properties, ATTENDEE parameters all preserved | High | ical.js modify-in-place, _raw preservation (already built into v1 DTOs) | Most CalDAV MCP servers do destructive updates. mcp-twake preserves everything by modifying _raw in-place. This is a significant differentiator. |
+| **ETag conflict detection with clear errors** | "This event was modified by someone else since you last viewed it. Please refresh and try again." | Medium | If-Match headers, 412 handling | Many MCP servers skip ETag handling. Proper conflict detection prevents data loss in multi-client environments |
+| **Client-side free/busy fallback** | Works even when server does not support Schedule plugin | Medium | Event fetch + interval computation | tsdav docs note freeBusyQuery "is not working with many CalDAV providers." Fallback ensures broad compatibility |
+| **Natural language dates on write tools** | "Schedule a meeting tomorrow at 2pm" vs requiring ISO 8601 | Low | chrono-node already used in read tools | Reuse existing date parsing from v1. Massive UX improvement for AI assistant workflows |
+| **Recurring event series creation** | "Schedule a weekly standup every Monday" | Medium | RRULE property on VEVENT | dominik1001/caldav-mcp does not support creating recurring events. mcp-twake will |
+| **Tool annotations for all tools** | Proper MCP metadata enables client-side safety features | Low | MCP SDK ToolAnnotations | Add annotations to ALL tools (existing read tools + new write tools). Most MCP servers skip annotations |
 
-### Why These Differentiate
-
-**Sovereign positioning** targets underserved market: organizations running Nextcloud/Twake/self-hosted calendars who want AI integration without Google/Microsoft dependencies. This is a strategic differentiator aligned with LINAGORA's mission.
-
-**Natural language date parsing** is becoming table stakes for consumer AI assistants but rare in CalDAV clients. Dramatically improves UX: "What's my schedule tomorrow?" vs "What's my schedule 2026-01-28T00:00:00Z?"
-
-**Smart context filtering** addresses MCP-specific problem: token efficiency. Competitors often dump full iCalendar objects to LLM context. Filtering to essential properties (SUMMARY, DTSTART) reduces tokens 5-10x.
-
-**Read-only safety** builds trust for v1 adoption. Organizations hesitant to give AI write access will try read-only integrations first. Explicit safety guarantee lowers adoption barrier.
+---
 
 ## Anti-Features
 
-Features to explicitly NOT build in v1. Common mistakes in this domain that would hurt the product.
+Features to explicitly NOT build in v2. Common over-engineering traps.
 
-| Anti-Feature | Why Avoid | What to Do Instead | Rationale |
-|--------------|-----------|-------------------|-----------|
-| **Write Operations (create/update/delete)** | Scope creep, safety concerns, testing complexity | Defer to v2 after read-only validation | PROJECT.md explicitly defers writes to v2. Read-only reduces risk, speeds v1 delivery. Write operations require conflict resolution, optimistic locking, extensive testing. |
-| **OAuth 2.0 Flow** | Complex setup, limited value for self-hosted servers | Basic auth only for v1 | SabreDAV standard is basic auth. OAuth adds complexity without clear v1 benefit. Most self-hosted users prefer simple credentials. |
-| **HTTP/SSE Transport** | Doubles implementation/testing surface | stdio only for v1 | PROJECT.md explicitly limits v1 to stdio. Claude Desktop/CLI use stdio. HTTP adds deployment complexity (CORS, auth, TLS). Defer to v2. |
-| **Real-Time Change Notifications** | Requires webhooks or polling, complex state management | Pull model only (query on demand) | v1 is read-only query tool. AI asks "what's my schedule?" server responds. No persistent state. Notifications require background processes, complicate deployment. |
-| **Custom Recurrence Rule Engine** | High complexity, bugs will happen, reinventing wheel | Use battle-tested library (rrule.js or tsdav) | Recurring events are deceptively complex. Cal.com blog documents pitfalls. Rely on existing parsers. |
-| **Multi-User / Multi-Tenant** | Adds authentication, data isolation, config complexity | Single-user config via env vars | v1 is personal MCP server. One user, one calendar, one config. Multi-tenancy requires user management, permission models. Defer to v2 or never. |
-| **Kitchen-Sink Tool Design** | One mega-tool with 20 parameters | Multiple focused tools (next-event, today-schedule, search-events) | MCP best practice: "avoid kitchen-sink tools." One tool = one clear purpose. AI assistants discover and compose focused tools better than navigating complex APIs. |
-| **Web UI or Mobile App** | Distracts from MCP server core mission | Headless server only, document with examples | This is an MCP server, not an end-user calendar app. Focus on tool API design. Users interact via Claude Desktop/CLI. |
-| **Calendar Modification Analysis** | "What changed since yesterday?" | Simple time-range queries only | Requires persistent state, version tracking. v1 is stateless query tool. AI can compare current vs cached state if needed. |
-| **Full vCard Property Editing** | 100+ vCard properties, many unused | Read-only contact queries for v1 | CardDAV write operations require preserving unknown properties (sabre/dav guidance). Complex. Defer to v2. |
-| **Server Auto-Discovery** | DNS SRV records, .well-known paths, complexity | Explicit server URL configuration | SabreDAV servers use various discovery methods. v1 requires users to provide full CalDAV/CardDAV URLs. Auto-discovery adds failure modes. |
-| **Attachment Handling** | Binary data in iCalendar, token expensive, security risk | Ignore attachments in v1 | CalDAV supports ATTACH property (files, images). Exposing to LLM wastes tokens, introduces security questions (download? scan?). Defer or never. |
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Individual occurrence editing** | Requires RECURRENCE-ID exception handling -- extremely complex. Creates new VEVENT components within the same .ics file, with DATE or DATE-TIME matching | Series-level only. update_event modifies the master VEVENT for the entire series. Document this limitation clearly |
+| **Code-level confirmation enforcement** | Confirmation parameters or two-step flows break tool composability. AI orchestration, not tool code, handles user interaction | Tool descriptions + MCP annotations guide AI behavior. Clients implement confirmation UI |
+| **Attendee scheduling (SCHEDULE)** | Full iMIP/iTIP scheduling (invitations, RSVPs, free-busy of others) requires CalDAV scheduling plugin, Outbox/Inbox collections, email integration | Add attendee emails as ATTENDEE properties, but do not send invitations. Document as "attendees are listed but not notified" |
+| **VALARM management on write** | Alarm creation/modification is complex (trigger types, action types, relative vs absolute). Users do not typically ask AI to set alarms | Preserve existing VALARMs on update (via _raw in-place modification). Do not expose alarm parameters on create |
+| **Full vCard property set on create** | vCard supports 50+ properties (ADR, BDAY, TITLE, ROLE, PHOTO, etc.). Exposing all parameters makes the tool unusable | Expose name, email, phone, organization on create. Additional fields can be added in future versions. Update preserves all existing fields |
+| **Batch operations** | "Delete all meetings this week" or "Create 10 contacts" -- dangerous, hard to confirm | Single-item operations only. AI can call tools in sequence if needed |
+| **Undo/rollback** | Maintaining operation history for undo is complex state management | CalDAV has no undo. Deleted items are gone. Tool descriptions warn about irreversibility |
+| **Calendar/addressbook creation** | MKCALENDAR and MKCOL operations add scope. Users rarely need this via AI | Out of scope for v2. Users create calendars via their calendar app |
+| **Event attachment upload** | ATTACH property with binary data is complex, security-sensitive, token-expensive | Not supported. Document as limitation |
 
-### Why These Are Anti-Features
-
-**Write operations** are the #1 scope creep risk. RFC 4791/6352 define calendar/contact modification protocols, but implementation requires optimistic locking (If-Match headers), conflict resolution, error recovery, extensive testing. Read-only v1 can ship in weeks. Full read/write takes months. PROJECT.md explicitly defers writes - respect that decision.
-
-**OAuth and HTTP transport** double complexity without doubling value. SabreDAV ecosystem standardizes on basic auth. stdio transport covers primary use case (Claude Desktop). These features serve edge cases at high cost.
-
-**Kitchen-sink tools** violate MCP best practices. Google Calendar MCP exposes 12 focused tools (list-calendars, create-event, search-events, etc.), not one mega-calendar-tool. Focused tools are more discoverable, composable, and debuggable.
-
-**Persistent state features** (notifications, change tracking) transform a simple query tool into a stateful daemon. Complexity explodes: background processes, error recovery, state persistence. v1 is request/response - keep it simple.
-
-**Custom implementations** of complex specs (RRULE, vCard) are bug factories. Use battle-tested libraries (rrule.js, tsdav) instead of writing parsers.
+---
 
 ## Feature Dependencies
 
 ```
-Core Query Infrastructure
-├─ Basic Auth Configuration (ENV vars)
-├─ CalDAV Connection Management
-│  ├─ PROPFIND (calendar discovery)
-│  ├─ REPORT (calendar-query, addressbook-query)
-│  └─ GET (individual resource fetch)
-└─ Error Handling (MCP isError pattern)
+Existing v1 Infrastructure (all complete)
+|- CalDAV/CardDAV client (tsdav)
+|- Calendar/AddressBook services with caching
+|- Event/Contact transformers with _raw preservation
+|- Calendar/Addressbook parameter resolution
+|- Natural language date parsing (chrono-node)
+|- Error handling patterns
 
-Calendar Features
-├─ List Calendars (PROPFIND) [no dependencies]
-├─ Calendar Query by Time Range (REPORT)
-│  ├─ Timezone Support (VTIMEZONE parsing) [dependency]
-│  ├─ Recurring Event Handling (RRULE expansion) [dependency]
-│  └─ Multi-Calendar Query (merge results) [optional]
-├─ Event Search by Keyword (REPORT + text filter)
-│  └─ Event Attendee Filtering (ATTENDEE property parsing) [optional]
-└─ Free/Busy Query (free-busy-query REPORT) [independent]
-
-Contact Features
-├─ List Contacts (addressbook-query) [no dependencies]
-├─ Contact Search by Name (addressbook-query + filter)
-├─ Contact Details Retrieval (GET or multiget)
-└─ Contact Organization Search (ORG property filter) [optional]
-
-Optimization Features
-├─ ETag/CTag Change Detection (conditional requests) [independent]
-├─ Smart Context Filtering (property selection in REPORT) [independent]
-└─ Batch Query Optimization (multiget REPORT) [independent]
-
-UX Features
-├─ Natural Language Date Parsing (date library) [independent]
-└─ AI-Friendly Error Messages (error format design) [independent]
+v2 Write Operations
+|- Service Layer Extensions
+|  |- CalendarService.findEventByUid(uid, calendar?)
+|  |- CalendarService.createEvent(params)
+|  |- CalendarService.updateEvent(uid, changes)
+|  |- CalendarService.deleteEvent(uid)
+|  |- AddressBookService.findContactByUid(uid, addressbook?)
+|  |- AddressBookService.createContact(params)
+|  |- AddressBookService.updateContact(uid, changes)
+|  |- AddressBookService.deleteContact(uid)
+|  '- CalendarService.getFreeBusy(timeRange) [with fallback]
+|
+|- iCalendar/vCard Construction
+|  |- Build VCALENDAR/VEVENT from parameters (ical.js)
+|  |- Modify existing iCalendar in-place (ical.js parse -> modify -> serialize)
+|  |- Build VCARD from parameters (ical.js)
+|  '- Modify existing vCard in-place (ical.js parse -> modify -> serialize)
+|
+|- MCP Tool Layer
+|  |- create_event tool + annotations
+|  |- update_event tool + annotations
+|  |- delete_event tool + annotations
+|  |- create_contact tool + annotations
+|  |- update_contact tool + annotations
+|  |- delete_contact tool + annotations
+|  '- get_freebusy tool + annotations
+|
+'- Infrastructure
+   |- Cache invalidation after write operations
+   |- 412 Precondition Failed error handling
+   '- Annotations added to existing read tools (readOnlyHint: true)
 ```
 
-**Critical Path for MVP:**
-1. Basic Auth + CalDAV connection
-2. List Calendars (validates connection)
-3. Calendar Query by Time Range (requires timezone + RRULE)
-4. Event Search by Keyword
-5. Contact Search by Name
-6. Contact Details Retrieval
+**Build order recommendation:**
 
-**Can Be Deferred:**
-- Free/busy queries (not in 8 use cases)
-- Organization search (enhancement to contact search)
-- Attendee filtering (enhancement to event search)
-- Batch optimization (performance, not functionality)
+1. **Service layer: findByUid methods** -- needed by update and delete tools
+2. **iCalendar/vCard construction utilities** -- needed by create and update tools
+3. **delete_event / delete_contact** -- simplest write operations, validate tsdav write path
+4. **create_event / create_contact** -- medium complexity, validate iCalendar/vCard generation
+5. **update_event / update_contact** -- highest complexity, validate in-place modification
+6. **get_freebusy** -- independent of CRUD, can be built in parallel
+7. **Annotations on all tools** -- final polish, applies to both read and write tools
+
+---
 
 ## MVP Recommendation
 
-For read-only v1, prioritize:
+### Must Ship (v2 release)
 
-### Phase 1: Foundation (Week 1-2)
-1. **Basic Auth Configuration** - ENV vars, stdio transport setup
-2. **CalDAV Connection** - PROPFIND, REPORT infrastructure
-3. **List Calendars** - First working tool, validates connection
-4. **Error Handling** - MCP isError pattern
+1. **create_event** with title, start, end, description, location, calendar parameter
+2. **update_event** with uid + any changeable field, ETag conflict detection
+3. **delete_event** with uid, ETag conflict detection
+4. **create_contact** with name, email, phone, organization, addressbook parameter
+5. **update_contact** with uid + any changeable field, ETag conflict detection
+6. **delete_contact** with uid
+7. **get_freebusy** with start, end, calendar parameter (client-side fallback)
+8. **MCP annotations** on all write tools (destructiveHint, readOnlyHint)
+9. **AI confirmation guidance** in all write tool descriptions
 
-### Phase 2: Core Calendar Queries (Week 3-4)
-5. **Calendar Query by Time Range** - Includes timezone support, basic RRULE
-6. **Natural Language Date Parsing** - "tomorrow", "this week" support
-7. **Event Search by Keyword** - SUMMARY/DESCRIPTION text search
+### Can Ship After v2
 
-### Phase 3: Contact Queries (Week 5)
-8. **Contact Search by Name** - CardDAV addressbook-query
-9. **Contact Details Retrieval** - Full vCard parsing
-10. **List Contacts** - Basic enumeration
+- Attendee parameter on create_event (add ATTENDEE properties without scheduling)
+- All-day event creation
+- Recurring event creation (RRULE parameter)
+- Annotations on existing read tools (quality improvement, not blocking)
 
-### Phase 4: Polish (Week 6)
-11. **Multi-Calendar Query** - Merge results across calendars
-12. **Smart Context Filtering** - Token optimization
-13. **ETag/CTag Optimization** - Performance improvements
+### Never Build (v2)
 
-### Defer to v2:
-- Write operations (create/update/delete events/contacts)
-- OAuth authentication
-- HTTP/SSE transport
-- Real-time notifications
-- Free/busy queries (unless user demand surfaces)
+- Individual occurrence editing (RECURRENCE-ID)
+- iMIP scheduling (invitation sending)
+- Calendar/addressbook creation (MKCALENDAR)
 - Attachment handling
-- Advanced recurring event modifications
+- Code-level confirmation enforcement
 
-### Never Build:
-- Multi-user/multi-tenant support (single-user tool)
-- Web UI or mobile app (headless MCP server)
-- Custom RRULE parser (use rrule.js)
-- Kitchen-sink mega-tools (violates MCP best practices)
+---
 
 ## Complexity Assessment
 
-| Feature Category | Implementation Complexity | Testing Complexity | Maintenance Burden |
-|-----------------|--------------------------|-------------------|-------------------|
-| Basic queries (list calendars/contacts) | Low | Low | Low |
-| Time-range queries | Medium | Medium | Low (stable RFCs) |
-| Timezone handling | High | High | Medium (edge cases) |
-| Recurring events (RRULE) | High | High | High (many edge cases) |
-| Text search | Medium | Medium | Low |
-| Natural language dates | Medium | Low | Low (library dependency) |
-| Contact search | Low-Medium | Low | Low |
-| Multi-calendar merge | Medium | Medium | Low |
-| ETag/CTag optimization | Low | Medium | Low |
-| Error handling (MCP) | Medium | Medium | Low |
-| **Overall v1 Scope** | **Medium-High** | **High** | **Low-Medium** |
+| Feature | Implementation | Testing | Risk | Notes |
+|---------|---------------|---------|------|-------|
+| delete_event | Low | Low | Low | Simple DELETE with ETag |
+| delete_contact | Low | Low | Low | Simple DELETE with ETag |
+| create_event | Medium | Medium | Medium | iCalendar construction |
+| create_contact | Medium | Low | Low | vCard construction simpler than iCalendar |
+| get_freebusy | Medium | Medium | Medium | Dual-path (server + client fallback) |
+| update_event | High | High | High | In-place modification, property preservation |
+| update_contact | High | Medium | High | In-place modification, property preservation |
+| Tool annotations | Low | Low | Low | Metadata only |
+| Cache invalidation | Low | Low | Low | Clear cache entry on write |
+| findByUid methods | Medium | Medium | Low | Search across collections |
 
-**Highest Risk Areas:**
-1. **Recurring events** - RRULE is deceptively complex. Edge cases: EXDATE, UNTIL, timezone interactions. Mitigation: use rrule.js library.
-2. **Timezone handling** - Floating times, DST transitions, VTIMEZONE parsing. Mitigation: use established iCalendar parser (tsdav).
-3. **SabreDAV compatibility** - Variations in REPORT responses across servers. Mitigation: test against multiple SabreDAV instances (Nextcloud, Twake).
+**Highest risk areas:**
+1. **update_event** -- In-place iCalendar modification with full property preservation. RRULE, VALARM, X-properties, ATTENDEE parameters must survive round-trip. Mitigation: use ical.js for parsing and serialization, never construct iCalendar strings manually.
+2. **update_contact** -- Same preservation challenge for vCard. Custom fields, PHOTO data, multiple typed TEL/EMAIL entries. Mitigation: parse _raw, modify specific properties, re-serialize.
+3. **get_freebusy fallback** -- Client-side free/busy computation must correctly handle recurring events, all-day events, TRANSPARENT events. Mitigation: reuse existing recurrence expansion code.
 
-## MCP Tool Design Patterns
+---
 
-Based on research into existing MCP servers and best practices:
+## Comparative Analysis: Write Operations in CalDAV MCP Servers
 
-### Pattern 1: Granular Tools (RECOMMENDED)
-**Example:** Google Calendar MCP (12 tools), dominik1001/caldav-mcp (4 tools)
+| Capability | dominik1001/caldav-mcp | nspady/google-calendar-mcp | mcp-twake v2 (Target) |
+|-----------|----------------------|--------------------------|----------------------|
+| **Create event** | Yes (summary, start, end) | Yes (full Google API params) | Yes (title, start, end, description, location, calendar) |
+| **Update event** | No | Yes | Yes (modify-in-place, preserves all properties) |
+| **Delete event** | Yes (uid + calendarUrl) | Yes | Yes (uid, ETag conflict detection) |
+| **Create contact** | No | No (Google Calendar, not Contacts) | Yes |
+| **Update contact** | No | No | Yes (modify-in-place, preserves all properties) |
+| **Delete contact** | No | No | Yes |
+| **Free/busy** | No | Yes (get-freebusy) | Yes (with client-side fallback) |
+| **Recurring create** | No | Yes | Yes (RRULE parameter) |
+| **Recurring update** | No | Yes (single occurrence) | Yes (series-level only) |
+| **ETag conflict detection** | Unclear | Via Google API | Yes (explicit If-Match) |
+| **MCP annotations** | No | Yes (tool filtering) | Yes (full annotations) |
+| **Confirmation pattern** | No guidance | Description-based | Description-based + annotations |
+| **Property preservation** | N/A (no update) | N/A (Google API) | Yes (in-place _raw modification) |
+| **Natural language dates** | No | No (RFC 3339 required) | Yes (chrono-node) |
 
-```
-Tools:
-- list_calendars()
-- get_next_event(calendar_id?)
-- get_today_schedule(calendar_id?)
-- search_events(query, start_date?, end_date?, calendar_id?)
-- get_events_in_range(start_date, end_date, calendar_id?)
-- list_contacts(addressbook_id?)
-- search_contacts(query, addressbook_id?)
-- get_contact_details(contact_id)
-```
+**Key insight:** mcp-twake v2 will be the most complete CalDAV/CardDAV MCP server in the ecosystem -- the only one combining event CRUD, contact CRUD, free/busy queries, ETag conflict detection, property-preserving updates, natural language dates, and MCP annotations. The property preservation during updates is a genuine competitive advantage that prevents data loss.
 
-**Pros:**
-- Each tool has single, clear purpose
-- AI assistants discover capabilities naturally
-- Easy to document and test
-- Composable: AI can chain tools
-
-**Cons:**
-- More tools = more code
-- Some parameter duplication
-
-**Verdict:** Use granular tools. MCP best practice: "avoid kitchen-sink tools."
-
-### Pattern 2: Coarse Tools (NOT RECOMMENDED)
-**Example:** Hypothetical mega-tool
-
-```
-Tools:
-- query_calendar(operation, calendar_id?, start?, end?, query?, ...)
-- query_contacts(operation, addressbook_id?, query?, ...)
-```
-
-**Pros:**
-- Fewer tool definitions
-- Centralized logic
-
-**Cons:**
-- Violates MCP best practices
-- Hard to discover ("what operations exist?")
-- Complex parameter validation
-- Poor AI assistant UX
-
-**Verdict:** Avoid. This is an anti-pattern in MCP ecosystem.
-
-### Resource URI Pattern (OPTIONAL)
-**Example:** MCP Resources feature
-
-```
-Resources:
-- caldav://calendar/work
-- caldav://calendar/personal
-- carddav://addressbook/contacts
-```
-
-**Pros:**
-- Clean resource representation
-- Client can list available resources
-
-**Cons:**
-- Resources are passive (read by user/AI), tools are active
-- Calendar queries are operations (tools) not static data (resources)
-
-**Verdict:** Resources are better for static context (documentation, schemas). Use tools for calendar/contact queries. Could expose calendar/addressbook metadata as resources if beneficial.
-
-## Natural Language Query Mapping
-
-How AI assistant queries map to MCP tools and CalDAV operations:
-
-| User Query (Natural Language) | Intended Tool | CalDAV Operation | Complexity |
-|------------------------------|---------------|------------------|------------|
-| "Quel est mon prochain rendez-vous ?" | get_next_event() | calendar-query with time-range (now to +1 year), limit 1 | Medium |
-| "Qu'est-ce que j'ai aujourd'hui ?" | get_today_schedule() | calendar-query with time-range (today 00:00 to 23:59) | Medium |
-| "Quels sont mes RDV cette semaine ?" | get_events_in_range("this week") | calendar-query with time-range (Monday to Sunday) | Medium |
-| "Quand est ma réunion avec Pierre ?" | search_events("Pierre") | calendar-query + text-match on SUMMARY or ATTENDEE | Medium-High |
-| "Quels calendriers ai-je ?" | list_calendars() | PROPFIND on calendar-home-set | Low |
-| "Quel est l'email de Marie Dupont ?" | search_contacts("Marie Dupont") + get_contact_details() | addressbook-query with text-match on FN | Low-Medium |
-| "Donne-moi les coordonnées de LINAGORA" | search_contacts("LINAGORA", include_org=true) | addressbook-query with text-match on ORG or FN | Low-Medium |
-| "Liste mes contacts récents" | list_contacts(sort="recent") | addressbook-query (all contacts) | Low |
-
-**Natural Language Date Examples:**
-- "tomorrow" → 2026-01-28 00:00:00 to 23:59:59
-- "next Tuesday" → 2026-02-03 00:00:00 to 23:59:59
-- "this week" → 2026-01-27 (Monday) to 2026-02-02 (Sunday)
-- "next month" → 2026-02-01 to 2026-02-28
-
-Use date-fns or similar library for parsing. LLM can also pre-process dates before calling tools.
-
-## Comparative Analysis: Existing MCP Calendar Servers
-
-| Feature | dominik1001/caldav-mcp | marklubin/caldav_mcp | nspady/google-calendar | mcp-twake (Target) |
-|---------|----------------------|---------------------|---------------------|-------------------|
-| **Protocol** | CalDAV | CalDAV/CardDAV/Tasks | Google Calendar API | CalDAV/CardDAV |
-| **Write Support** | Yes (create/delete) | Yes | Yes | No (v1 read-only) |
-| **Contact Support** | No | Yes | No | Yes |
-| **Multi-Calendar** | Unclear | Yes | Yes | Yes |
-| **Natural Language Dates** | No | Unclear | Yes | Yes (planned) |
-| **Tool Count** | 4 tools | Unknown | 12 tools | ~8-10 tools (planned) |
-| **Timezone Handling** | Unclear | Unclear | Yes | Yes (planned) |
-| **Recurring Events** | Unclear | Unclear | Yes | Yes (planned) |
-| **License** | Unknown | Unknown | Unknown | AGPL-3.0 |
-| **Target Platform** | Generic CalDAV | Generic CalDAV | Google only | SabreDAV (Nextcloud/Twake) |
-| **Differentiator** | Simple, read/write | Python, multi-protocol | Feature-rich, Google-specific | Sovereign infrastructure focus |
-
-**Key Insight:** Most existing CalDAV MCP servers support write operations, but lack focus on SabreDAV-specific testing, sovereign infrastructure positioning, and token-efficient context filtering. mcp-twake can differentiate by being the "safe sovereign alternative" (read-only, AGPL, SabreDAV-tested).
+---
 
 ## Sources
 
-### CalDAV/CardDAV Standards
-- [RFC 4791: CalDAV](https://datatracker.ietf.org/doc/html/rfc4791) - CalDAV specification
-- [RFC 6352: CardDAV](https://datatracker.ietf.org/doc/html/rfc6352) - CardDAV specification
-- [RFC 5545: iCalendar](https://icalendar.org/iCalendar-RFC-5545/3-8-5-3-recurrence-rule.html) - RRULE specification
-- [iCalendar.org CalDAV Access](https://icalendar.org/CalDAV-Access-RFC-4791/) - CalDAV query examples
+### CalDAV/CardDAV Write Operations (HIGH Confidence)
+- [RFC 4791: CalDAV](https://datatracker.ietf.org/doc/html/rfc4791) -- Section 5.3.2 (Creating Calendar Object Resources), Section 5.3.4 (ETag requirements)
+- [RFC 4791 Section 7.10: Free-Busy Query](https://icalendar.org/CalDAV-Access-RFC-4791/7-10-caldav-free-busy-query-report.html) -- Free-busy-query REPORT specification
+- [RFC 4791 Section 7.10.1: Free-Busy Example](https://icalendar.org/CalDAV-Access-RFC-4791/7-10-1-example-successful-caldav-free-busy-query-report.html) -- Successful free-busy-query example
+- [SabreDAV: Building a CalDAV Client](https://sabre.io/dav/building-a-caldav-client/) -- PUT with If-Match, If-None-Match patterns
+- [SabreDAV: CalDAV Scheduling](https://sabre.io/dav/scheduling/) -- Schedule plugin, free-busy support
 
-### SabreDAV Implementation
-- [Building a CalDAV Client](https://sabre.io/dav/building-a-caldav-client/) - Official SabreDAV client guide
-- [Building a CardDAV Client](https://sabre.io/dav/building-a-carddav-client/) - Official SabreDAV CardDAV guide
+### tsdav Library (HIGH Confidence)
+- [tsdav TypeScript Declarations](https://unpkg.com/browse/tsdav@2.0.3/dist/tsdav.d.ts) -- createCalendarObject, updateCalendarObject, deleteCalendarObject, createVCard, updateVCard, deleteVCard, freeBusyQuery type signatures
+- [tsdav GitHub](https://github.com/natelindev/tsdav) -- Usage examples, issue tracker
+- [tsdav addressBook.ts](https://github.com/natelindev/tsdav/blob/e747a0e4c58339e9b4cb2be1bd60a6374a1873ac/src/addressBook.ts) -- createVCard, updateVCard, deleteVCard implementations
 
-### MCP Protocol & Best Practices
-- [MCP Specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25) - Official MCP spec
-- [MCP Best Practices](https://mcp-best-practice.github.io/mcp-best-practice/best-practice/) - Tool design patterns
-- [MCP Error Handling Guide](https://mcpcat.io/guides/error-handling-custom-mcp-servers/) - Error patterns
+### MCP Tool Annotations (HIGH Confidence)
+- [MCP Tools Specification](https://modelcontextprotocol.io/docs/concepts/tools) -- Tool annotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
+- [MCP Tool Annotations Introduction](https://blog.marcnuri.com/mcp-tool-annotations-introduction) -- Practical annotation guidance
+- [MCP Tool Descriptions Best Practices](https://www.merge.dev/blog/mcp-tool-description) -- Description patterns for side effects
 
-### Existing MCP Implementations
-- [dominik1001/caldav-mcp](https://github.com/dominik1001/caldav-mcp) - CalDAV MCP reference implementation
-- [marklubin/caldav_mcp](https://github.com/marklubin/caldav_mcp) - Python CalDAV/CardDAV MCP
-- [nspady/google-calendar-mcp](https://github.com/nspady/google-calendar-mcp) - Google Calendar MCP (12 tools)
+### MCP Security & Confirmation (MEDIUM-HIGH Confidence)
+- [MCP Security Survival Guide](https://towardsdatascience.com/the-mcp-security-survival-guide-best-practices-pitfalls-and-real-world-lessons/) -- Human-in-the-loop patterns
+- [Securing MCP Servers](https://corgea.com/Learn/securing-model-context-protocol-(mcp)-servers-threats-and-best-practices) -- Confirmation for destructive operations
+- [SEP-1382: Documentation Best Practices](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1382) -- Tool description standards proposal
 
-### TypeScript CalDAV Libraries
-- [tsdav on npm](https://www.npmjs.com/package/tsdav) - Native TypeScript CalDAV/CardDAV client (33k weekly downloads)
-- [tsdav on GitHub](https://github.com/natelindev/tsdav) - WebDAV, CalDAV, CardDAV for Node.js and browser
+### Existing MCP Implementations (MEDIUM Confidence)
+- [dominik1001/caldav-mcp](https://github.com/dominik1001/caldav-mcp) -- create-event (summary, start, end), delete-event (uid, calendarUrl), list-events, list-calendars
+- [nspady/google-calendar-mcp](https://github.com/nspady/google-calendar-mcp) -- 12 tools including create-event, update-event, delete-event, get-freebusy
+- [caldav-mcp on Glama](https://glama.ai/mcp/servers/@dominik1001/caldav-mcp) -- Tool parameter details
 
-### Domain-Specific Resources
-- [Cal.com CalDAV Challenges](https://cal.com/blog/the-intricacies-and-challenges-of-implementing-a-caldav-supporting-system-for-cal) - Production pitfalls
-- [Nylas RRULE Guide](https://www.nylas.com/blog/calendar-events-rrules/) - Recurring event complexity
-- [AI Scheduling Assistants 2026](https://www.lindy.ai/blog/ai-scheduling-assistant) - NLP date parsing patterns
+### iCalendar/vCard Generation (MEDIUM Confidence)
+- [ical-generator npm](https://www.npmjs.com/package/ical-generator) -- iCalendar generation library (alternative to ical.js for construction)
+- [ical.js GitHub](https://github.com/kewisch/ical.js) -- Already used in mcp-twake for parsing, also supports construction
 
-### Performance & Resilience
-- [MCP Server Best Practices](https://www.cdata.com/blog/mcp-server-best-practices-2026) - Resource management
-- [MCP Timeout and Retry](https://octopus.com/blog/mcp-timeout-retry) - Resilience patterns
-- [Better MCP Error Responses](https://alpic.ai/blog/better-mcp-tool-call-error-responses-ai-recover-gracefully) - AI recovery patterns
+### SabreDAV Free-Busy Issues (MEDIUM Confidence)
+- [Baikal free-busy-query error 500](https://github.com/sabre-io/Baikal/issues/697) -- Known issue with empty timezone
+- [tsdav changelog](https://beta.changelogs.md/github/natelindev/tsdav/) -- freeBusyQuery added but noted as unreliable with many providers
 
 ## Confidence Assessment
 
 | Area | Confidence | Rationale |
 |------|-----------|-----------|
-| CalDAV/CardDAV Features | HIGH | Based on RFC 4791/6352, SabreDAV official docs, existing implementations |
-| MCP Tool Design | HIGH | Official MCP spec, best practices docs, multiple reference implementations analyzed |
-| Recurring Events Complexity | HIGH | Multiple sources confirm RRULE is high-complexity (Cal.com blog, Nylas guide, RFC 5545) |
-| Timezone Handling | HIGH | RFC 4791 section on timezone handling, SabreDAV docs, production pitfall reports |
-| Feature Prioritization | MEDIUM-HIGH | Based on stated 8 use cases, MCP best practices, competitive analysis. Some assumptions about user priorities. |
-| Performance Patterns | MEDIUM | Based on MCP server best practices 2026, but specific CalDAV performance needs project-specific |
-| Sovereign Positioning Value | MEDIUM | Based on LINAGORA context and market trends, but competitive advantage needs validation |
-
-## Open Questions for Phase Planning
-
-1. **Library Selection:** tsdav vs custom CalDAV client? (tsdav has 33k weekly downloads, MIT license, browser+Node support)
-2. **RRULE Strategy:** rrule.js library vs tsdav built-in expansion? (Both are battle-tested)
-3. **Tool Granularity:** 8 tools (one per use case) or 12+ tools (Google Calendar pattern)?
-4. **Resource Exposure:** Should calendar/addressbook metadata be exposed as MCP Resources or only via tools?
-5. **Caching Strategy:** In-memory CTag cache or stateless every-request queries?
-6. **Error Recovery:** Should tools auto-retry on transient failures or return errors immediately?
-7. **Multi-Calendar Default:** Query all calendars by default, or require calendar_id parameter?
-8. **Contact Sorting:** "Recent contacts" - sort by REV (last modified) or FN (alphabetical)?
-
-These questions should be researched during phase-specific planning, not now. Enough information exists to structure the roadmap.
+| CalDAV Write Protocol (PUT/DELETE/ETag) | HIGH | RFC 4791 specification, SabreDAV official guide, tsdav type signatures verified |
+| CardDAV Write Protocol | HIGH | RFC 6352, tsdav createVCard/updateVCard/deleteVCard type signatures verified |
+| tsdav Write API | HIGH | Type signatures extracted from unpkg.com, usage examples from GitHub |
+| Free/Busy Query Protocol | HIGH | RFC 4791 Section 7.10 with full example |
+| Free/Busy Server Support | MEDIUM | tsdav notes "not working with many providers," SabreDAV requires Schedule plugin |
+| MCP Tool Annotations | HIGH | Verified in installed MCP SDK, official spec reviewed |
+| Confirmation Pattern | HIGH | MCP spec guidance, PROJECT.md decision, security best practices |
+| Competitive Analysis | MEDIUM | Based on GitHub READMEs, may miss recent updates |
+| iCalendar Construction | MEDIUM | ical.js can construct (verified in codebase for reading), but construction path less exercised |
+| Property Preservation Risk | HIGH | SabreDAV docs explicitly warn, v1 pitfalls doc covers this, _raw already preserved |
