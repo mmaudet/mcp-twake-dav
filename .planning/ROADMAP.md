@@ -277,9 +277,9 @@ The following features were delivered beyond the original roadmap:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 07-01-PLAN.md -- Write types (ConflictError, input interfaces, FreeBusy DTOs)
-- [ ] 07-02-PLAN.md -- iCalendar event builder (buildICalString + updateICalString) with TDD
-- [ ] 07-03-PLAN.md -- vCard contact builder (buildVCardString + updateVCardString) with TDD
+- [x] 07-01-PLAN.md -- Write types (ConflictError, input interfaces, FreeBusy DTOs)
+- [x] 07-02-PLAN.md -- iCalendar event builder (buildICalString + updateICalString) with TDD
+- [x] 07-03-PLAN.md -- vCard contact builder (buildVCardString + updateVCardString) with TDD
 
 **Notes:**
 - New files: `src/transformers/event-builder.ts`, `src/transformers/contact-builder.ts`
@@ -289,7 +289,7 @@ Plans:
 - All builder functions are pure and unit-testable without network access
 - Pitfalls addressed: lossy round-trip (P1), missing properties (P6), vCard validation (P7), UID uniqueness (P8), DTSTAMP/SEQUENCE (P13)
 
-**Status:** Not Started
+**Status:** Complete (2026-01-27)
 
 ---
 
@@ -445,15 +445,15 @@ Plans:
 | 4 - Calendar Query Services | v1 | CAL-01 to CAL-04, CAL-07, CAL-08 | Complete | 100% |
 | 5 - Contact Query Services | v1 | CON-01 to CON-04 | Complete | 100% |
 | 6 - MCP Integration & Testing | v1 | (validation) | Complete | 100% |
-| 7 - Write Infrastructure & Reverse Transformers | v2 | WINF-01 (partial), WINF-03 | Not Started | 0% |
+| 7 - Write Infrastructure & Reverse Transformers | v2 | WINF-01 (partial), WINF-03 | Complete | 100% |
 | 8 - Service Layer Write Methods | v2 | WINF-01 (complete), WINF-02 | Not Started | 0% |
 | 9 - Calendar Write Tools | v2 | CALW-01, CALW-02, CALW-03, WINF-05 (cal) | Not Started | 0% |
 | 10 - Contact Write Tools | v2 | CONW-01, CONW-02, CONW-03, WINF-05 (con) | Not Started | 0% |
 | 11 - Free/Busy & MCP Annotations | v2 | ADV-01, WINF-04 | Not Started | 0% |
 
 **v1:** 18/18 requirements complete (100%)
-**v2:** 0/12 requirements complete (0%)
-**Overall:** 18/30 requirements complete (60%)
+**v2:** 1/12 requirements complete (8%)
+**Overall:** 19/30 requirements complete (63%)
 
 ## Milestone Status
 
@@ -471,4 +471,4 @@ Plans:
 
 ---
 
-*Last updated: 2026-01-27 after v2 roadmap creation*
+*Last updated: 2026-01-27 after Phase 7 completion*
