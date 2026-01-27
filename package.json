@@ -1,7 +1,7 @@
 {
   "name": "mcp-twake",
   "version": "0.1.0",
-  "description": "MCP server for CalDAV/CardDAV calendars and contacts",
+  "description": "MCP server for Twake.ai: integrate your sovereign Digital Workplace with any MCP-compatible AI assistant",
   "license": "AGPL-3.0",
   "type": "module",
   "main": "build/index.js",

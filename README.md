@@ -1,18 +1,18 @@
 # mcp-twake
 
-**MCP server for querying CalDAV calendars and CardDAV contacts from Claude Desktop**
+**MCP server for [Twake.ai](https://www.twake.ai/) — integrate your sovereign Digital Workplace with any MCP-compatible AI assistant**
 
 **License:** AGPL-3.0
 
 ## Overview
 
-mcp-twake is a read-only Model Context Protocol (MCP) server that enables Claude to query CalDAV calendars and CardDAV contacts from your own sovereign infrastructure. Compatible with SabreDAV-based servers including Nextcloud, Twake, and other CalDAV/CardDAV implementations.
+mcp-twake is a read-only Model Context Protocol (MCP) server that connects any MCP-compatible AI assistant (Claude Desktop, Claude CLI, etc.) to your CalDAV calendars and CardDAV contacts. Compatible with SabreDAV-based servers including Twake, Nextcloud, and other CalDAV/CardDAV implementations.
 
 **Key benefits:**
-- Your data stays on your own servers
-- No third-party services required
+- Your data stays on your own servers — sovereign infrastructure
+- Works with any MCP-compatible AI assistant
 - Full control over calendar and contact data
-- Native integration with Claude Desktop
+- Installable via npm — no local build required
 - Secure HTTPS-only connections (except localhost for development)
 
 ## Features
@@ -42,17 +42,29 @@ mcp-twake is a read-only Model Context Protocol (MCP) server that enables Claude
 
 - **Node.js** >= 18.0.0
 - **CalDAV/CardDAV Server** - A SabreDAV-compatible server such as:
-  - Nextcloud
   - Twake
+  - Nextcloud
   - OwnCloud
   - SOGo
   - DAVical
   - iCloud (limited support)
 - **HTTPS Required** - Your CalDAV/CardDAV server must use HTTPS (except localhost for development)
-- **Claude Desktop** or **Claude CLI** - To use the MCP server
+- **MCP-compatible AI assistant** - Claude Desktop, Claude CLI, or any MCP client
 
 ## Installation
 
+**Via npx (recommended — no install needed):**
+```bash
+npx mcp-twake
+```
+
+**Global install:**
+```bash
+npm install -g mcp-twake
+mcp-twake
+```
+
+**From source (development):**
 ```bash
 git clone https://github.com/linagora/mcp-twake.git
 cd mcp-twake
@@ -68,12 +80,14 @@ The server requires the following environment variables:
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `DAV_URL` | Yes | CalDAV/CardDAV server base URL (HTTPS required, except localhost) | `https://dav.linagora.com` |
-| `DAV_AUTH_METHOD` | No | Authentication method: `basic` (default), `bearer`, or `esntoken` | `basic` |
+| `DAV_URL` | Yes | CalDAV/CardDAV server base URL (HTTPS required, except localhost) | `https://dav.example.com` |
+| `DAV_AUTH_METHOD` | No | Authentication method: `basic` (default) or `bearer` | `basic` |
 | `DAV_USERNAME` | For basic auth | Authentication username | `user@example.com` |
 | `DAV_PASSWORD` | For basic auth | Authentication password | `your-password` |
-| `DAV_TOKEN` | For bearer/esntoken | Authentication token (JWT or ESNToken) | `eyJhbG...` |
-| `LOG_LEVEL` | No | Log verbosity level (options: `fatal`, `error`, `warn`, `info`, `debug`, `trace`) | `info` (default) |
+| `DAV_TOKEN` | For bearer auth | JWT Bearer token | `eyJhbG...` |
+| `DAV_DEFAULT_CALENDAR` | No | Default calendar name to query (omit to query all) | `My Calendar` |
+| `DAV_DEFAULT_ADDRESSBOOK` | No | Default address book name to query (omit to query all) | `My Contacts` |
+| `LOG_LEVEL` | No | Log verbosity level: `fatal`, `error`, `warn`, `info`, `debug`, `trace` | `info` (default) |
 
 **Security Note:** HTTPS is enforced to prevent credential exposure. Only `localhost` and `127.0.0.1` are allowed over HTTP for development purposes.
 
@@ -92,12 +106,6 @@ DAV_AUTH_METHOD=bearer
 DAV_TOKEN=eyJhbGciOiJSUzI1NiIs...
 ```
 
-**ESNToken** — OpenPaaS/Twake session token, sent as `ESNToken: <token>`:
-```bash
-DAV_AUTH_METHOD=esntoken
-DAV_TOKEN=your-esn-session-token
-```
-
 ### Claude Desktop Configuration
 
 To use mcp-twake with Claude Desktop, add the following to your Claude Desktop configuration file:
@@ -113,55 +121,41 @@ To use mcp-twake with Claude Desktop, add the following to your Claude Desktop c
 {
   "mcpServers": {
     "twake": {
-      "command": "node",
-      "args": ["/absolute/path/to/mcp-twake/build/index.js"],
+      "command": "npx",
+      "args": ["-y", "mcp-twake"],
       "env": {
         "DAV_URL": "https://dav.example.com",
         "DAV_USERNAME": "user@example.com",
-        "DAV_PASSWORD": "your-password"
+        "DAV_PASSWORD": "your-password",
+        "DAV_DEFAULT_CALENDAR": "My Calendar",
+        "DAV_DEFAULT_ADDRESSBOOK": "My Contacts"
       }
     }
   }
 }
 ```
 
-**Configuration (Bearer Token — e.g., OpenPaaS/Twake):**
+**Configuration (Bearer Token):**
 
 ```json
 {
   "mcpServers": {
     "twake": {
-      "command": "node",
-      "args": ["/absolute/path/to/mcp-twake/build/index.js"],
+      "command": "npx",
+      "args": ["-y", "mcp-twake"],
       "env": {
-        "DAV_URL": "https://dav.linagora.com",
+        "DAV_URL": "https://dav.example.com",
         "DAV_AUTH_METHOD": "bearer",
-        "DAV_TOKEN": "your-jwt-token"
+        "DAV_TOKEN": "your-jwt-token",
+        "DAV_DEFAULT_CALENDAR": "My Calendar",
+        "DAV_DEFAULT_ADDRESSBOOK": "My Contacts"
       }
     }
   }
 }
 ```
 
-**Configuration (ESNToken — legacy OpenPaaS):**
-
-```json
-{
-  "mcpServers": {
-    "twake": {
-      "command": "node",
-      "args": ["/absolute/path/to/mcp-twake/build/index.js"],
-      "env": {
-        "DAV_URL": "https://dav.linagora.com",
-        "DAV_AUTH_METHOD": "esntoken",
-        "DAV_TOKEN": "your-esn-token"
-      }
-    }
-  }
-}
-```
-
-**Important:** Replace `/absolute/path/to/mcp-twake` with the actual absolute path where you cloned the repository.
+`DAV_DEFAULT_CALENDAR` and `DAV_DEFAULT_ADDRESSBOOK` are optional. When set, tools query only the named calendar/address book by default. Use `"all"` as a tool parameter to override and search all calendars or address books.
 
 After updating the configuration, restart Claude Desktop for changes to take effect.
 
@@ -190,15 +184,15 @@ Once configured, you can ask Claude natural language questions about your calend
 
 | Tool Name | Description |
 |-----------|-------------|
-| `get_next_event` | Get the next upcoming calendar event from all calendars |
-| `get_todays_schedule` | Get all events scheduled for today, sorted by time |
-| `get_events_in_range` | Get events for a date range using natural language (e.g., "this week", "next month") |
-| `search_events` | Search calendar events by keyword in title/description or by attendee name |
-| `list_calendars` | List all available calendars for the authenticated user |
-| `search_contacts` | Search contacts by name or organization across all address books |
-| `get_contact_details` | Get full details for a specific contact by name |
-| `list_contacts` | List all contacts from all address books (limited to 30 contacts) |
-| `list_addressbooks` | List all available address books for the authenticated user |
+| `get_next_event` | Get the next upcoming event. Optional `calendar` filter |
+| `get_todays_schedule` | Get all events for today, sorted by time. Optional `calendar` filter |
+| `get_events_in_range` | Get events for a date range (natural language). Optional `calendar` filter |
+| `search_events` | Search events by keyword or attendee. Optional `calendar` filter |
+| `list_calendars` | List all available calendars |
+| `search_contacts` | Search contacts by name or organization. Optional `addressbook` filter |
+| `get_contact_details` | Get full details for a contact by name. Optional `addressbook` filter |
+| `list_contacts` | List contacts (limited to 30). Optional `addressbook` filter |
+| `list_addressbooks` | List all available address books |
 
 ## Troubleshooting
 
@@ -206,11 +200,11 @@ Once configured, you can ask Claude natural language questions about your calend
 
 **1. "Configuration validation failed" / Missing environment variables**
 - **Problem:** Required environment variables are missing for the selected auth method
-- **Solution:** For basic auth (default): set `DAV_URL`, `DAV_USERNAME`, `DAV_PASSWORD`. For bearer/esntoken auth: set `DAV_URL`, `DAV_AUTH_METHOD`, `DAV_TOKEN`
+- **Solution:** For basic auth (default): set `DAV_URL`, `DAV_USERNAME`, `DAV_PASSWORD`. For bearer auth: set `DAV_URL`, `DAV_AUTH_METHOD=bearer`, `DAV_TOKEN`
 
 **2. "Authentication failed" / 401 Unauthorized**
 - **Problem:** Invalid credentials or token
-- **Solution:** For basic auth: verify DAV_USERNAME and DAV_PASSWORD. For bearer/esntoken: verify DAV_TOKEN is valid and not expired. You can also try a different auth method with `DAV_AUTH_METHOD`
+- **Solution:** For basic auth: verify DAV_USERNAME and DAV_PASSWORD. For bearer auth: verify DAV_TOKEN is valid and not expired
 
 **3. "Cannot find server" / DNS resolution error**
 - **Problem:** The DAV_URL hostname cannot be resolved
@@ -234,11 +228,11 @@ Once configured, you can ask Claude natural language questions about your calend
 
 **8. Claude Desktop not showing tools / Tools not available**
 - **Problem:** MCP server not loaded or configuration error
-- **Solution:** Restart Claude Desktop after changing the configuration file. Verify the configuration file path is correct for your OS. Check that the absolute path to `build/index.js` is correct. Review Claude Desktop logs for error messages
+- **Solution:** Restart Claude Desktop after changing the configuration file. Verify the configuration file path is correct for your OS. Ensure `npx` is available in your PATH. Review Claude Desktop logs for error messages
 
 **9. "Cannot find module" / Module resolution error**
-- **Problem:** Build step not completed or build directory missing
-- **Solution:** Run `npm run build` to compile TypeScript to JavaScript. Ensure the `build/` directory exists and contains `index.js`
+- **Problem:** Package not installed or build directory missing (when running from source)
+- **Solution:** Use `npx -y mcp-twake` (recommended) or, if running from source, run `npm run build` to compile TypeScript
 
 **10. Connection refused on localhost**
 - **Problem:** Development server not running or wrong port
@@ -246,23 +240,18 @@ Once configured, you can ask Claude natural language questions about your calend
 
 ## Development
 
-**Watch mode (auto-rebuild on file changes):**
+For contributors working from source:
+
 ```bash
-npm run dev
+git clone https://github.com/linagora/mcp-twake.git
+cd mcp-twake
+npm install
+npm run build    # compile TypeScript
+npm test         # run tests
+npm run dev      # watch mode (auto-rebuild on file changes)
 ```
 
-**Production build:**
-```bash
-npm run build
-```
-
-**Testing the server:**
-After building, you can test the server manually by running:
-```bash
-node build/index.js
-```
-
-The server uses the MCP stdio transport and will start listening for MCP protocol messages on stdin/stdout.
+The server uses the MCP stdio transport and communicates via JSON-RPC on stdin/stdout.
 
 ## Architecture
 
@@ -270,7 +259,7 @@ mcp-twake is built with a layered architecture:
 
 1. **Configuration Layer** - Zod-based environment variable validation with fail-fast behavior and HTTPS enforcement
 2. **Logging Layer** - Pino logger configured for stderr output (prevents stdout contamination in MCP stdio transport)
-3. **CalDAV/CardDAV Client Layer** - Dual tsdav clients for CalDAV and CardDAV with discovery, multi-method authentication (Basic, Bearer, ESNToken), and connection validation
+3. **CalDAV/CardDAV Client Layer** - Dual tsdav clients for CalDAV and CardDAV with discovery, multi-method authentication (Basic, Bearer), and connection validation
 4. **Infrastructure Layer** - Retry logic with exponential backoff and jitter, CTag-based caching for performance optimization
 5. **Service Layer** - CalendarService and AddressBookService with resource fetching and caching management
 6. **Transformation Layer** - iCal.js-based parsing of iCalendar and vCard formats, timezone normalization, RRULE expansion
