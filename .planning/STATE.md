@@ -1,8 +1,8 @@
 # State: mcp-twake
 
 **Last Updated:** 2026-01-27
-**Current Phase:** Phase 10 - Contact Write Tools
-**Current Plan:** 2 of 2 (complete)
+**Current Phase:** Phase 11 - Free/Busy & Annotations
+**Current Plan:** 1 of 2
 
 ## Project Reference
 
@@ -13,21 +13,21 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 
 ## Current Position
 
-Phase: 10 of 11 (Contact Write Tools)
-Plan: 2 of 2 (complete)
-Status: Phase complete
-Last activity: 2026-01-27 -- Completed 10-02-PLAN.md
+Phase: 11 of 11 (Free/Busy & Annotations)
+Plan: 1 of 2
+Status: In progress
+Last activity: 2026-01-27 -- Completed 11-01-PLAN.md
 
 Milestone: v2 - Write Operations & Free/Busy
 
-Progress: [|||||||||||||█████████] 92% (v1 complete + 10 v2 plans)
+Progress: [|||||||||||||██████████] 96% (v1 complete + 11 v2 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 26 (16 v1 + 10 v2)
-- v2 plans completed: 10
-- Total execution time: 23.0 min (v2 only; v1 metrics not tracked)
+- Total plans completed: 27 (16 v1 + 11 v2)
+- v2 plans completed: 11
+- Total execution time: 26.0 min (v2 only; v1 metrics not tracked)
 
 **By Phase:**
 
@@ -43,6 +43,7 @@ Progress: [|||||||||||||█████████] 92% (v1 complete + 10 v2 pl
 | 8 - Service Layer Write Methods | 2 of 2 | Complete (v2) |
 | 9 - Calendar Write Tools | 2 of 2 | Complete (v2) |
 | 10 - Contact Write Tools | 2 of 2 | Complete (v2) |
+| 11 - Free/Busy & Annotations | 1 of 2 | In progress (v2) |
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - update_contact validates at least one updatable field (name/email/phone/organization) (Phase 10 Plan 2)
 - update_contact has NO RRULE safety check or attendee warnings (contacts don't have either) (Phase 10 Plan 2)
 - Integration tests validate all 15 tools including 6 write tools with IMPORTANT confirmation (Phase 10 Plan 2)
+- freeBusyQuery uses standalone tsdav import with manual auth headers from CalendarService.getAuthHeaders() (Phase 11 Plan 1)
+- Server-side REPORT returns early on success; client-side fallback always works independently (Phase 11 Plan 1)
+- TRANSPARENT events filtered via ICAL.parse of _raw field, not DTO property (Phase 11 Plan 1)
 
 ### Pending Todos
 
@@ -88,17 +92,17 @@ None currently.
 
 ### Research Flags
 
-- Phase 11 (Free/Busy): MEDIUM -- freeBusyQuery auth header injection, SabreDAV Schedule plugin behavior
+- Phase 11 (Free/Busy): RESOLVED -- freeBusyQuery auth header injection implemented via CalendarService.getAuthHeaders()
 - Phases 7-10: No research needed (patterns verified in v2 research)
 
 ## Session Continuity
 
-Last session: 2026-01-27 -- Phase 10 Plan 2 executed
-Stopped at: Completed 10-02-PLAN.md (update_contact tool created, all 3 contact write tools registered)
+Last session: 2026-01-27 -- Phase 11 Plan 1 executed
+Stopped at: Completed 11-01-PLAN.md (check_availability tool module + auth headers + busy period utilities)
 Resume file: None
 
-Next: Execute Phase 11 (Free/Busy) - check_availability tool and freeBusyQuery service method
+Next: Execute Phase 11 Plan 2 (tool registration with annotations)
 
 ---
-*State updated: 2026-01-27 after Phase 10 Plan 2 execution*
-*Phase 10 Complete - All contact write tools delivered and registered*
+*State updated: 2026-01-27 after Phase 11 Plan 1 execution*
+*Phase 11 Plan 1 Complete - check_availability tool module ready for registration*
