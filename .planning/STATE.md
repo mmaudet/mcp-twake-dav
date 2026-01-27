@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-27
 **Current Phase:** Phase 8 - Service Layer Write Methods
-**Current Plan:** 1 of 2 (08-01 complete)
+**Current Plan:** 2 of 2 (phase complete)
 
 ## Project Reference
 
@@ -14,20 +14,20 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 ## Current Position
 
 Phase: 8 of 11 (Service Layer Write Methods)
-Plan: 1 of 2 (08-01 complete)
-Status: In progress
-Last activity: 2026-01-27 -- Completed 08-01-PLAN.md
+Plan: 2 of 2 (all complete)
+Status: Phase complete
+Last activity: 2026-01-27 -- Completed 08-02-PLAN.md
 
 Milestone: v2 - Write Operations & Free/Busy
 
-Progress: [|||||||||||█████....] 70% (v1 complete + 4 v2 plans)
+Progress: [|||||||||||██████...] 73% (v1 complete + 5 v2 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20 (16 v1 + 4 v2)
-- v2 plans completed: 4
-- Total execution time: 11 min (v2 only; v1 metrics not tracked)
+- Total plans completed: 21 (16 v1 + 5 v2)
+- v2 plans completed: 5
+- Total execution time: 14 min (v2 only; v1 metrics not tracked)
 
 **By Phase:**
 
@@ -40,7 +40,7 @@ Progress: [|||||||||||█████....] 70% (v1 complete + 4 v2 plans)
 | 5 - Contact Query | 2 | Complete (v1) |
 | 6 - Integration & Testing | 3 | Complete (v1) |
 | 7 - Write Infrastructure | 3 of 3 | Complete (v2) |
-| 8 - Service Layer Write Methods | 1 of 2 | In Progress (v2) |
+| 8 - Service Layer Write Methods | 2 of 2 | Complete (v2) |
 
 ## Accumulated Context
 
@@ -64,6 +64,9 @@ Recent decisions affecting current work:
 - createEvent generates UUID filenames for uniqueness (Phase 8 Plan 1)
 - deleteEvent automatically fetches fresh ETag if not provided (Phase 8 Plan 1)
 - All write operations invalidate collection cache, not individual objects (Phase 8 Plan 1)
+- If-None-Match: * on createContact prevents duplicate UIDs via 412 (Phase 8 Plan 2)
+- deleteContact fetches fresh ETag if not provided (Phase 8 Plan 2)
+- findContactByUid/findEventByUid use linear search (acceptable for typical collection sizes) (Phase 8 Plan 2)
 
 ### Pending Todos
 
@@ -80,11 +83,11 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-01-27 -- Completed 08-01-PLAN.md
-Stopped at: Phase 8 Plan 1 complete, ready for Plan 2
+Last session: 2026-01-27 -- Completed Phase 8 (Service Layer Write Methods)
+Stopped at: Phase 8 complete, ready for Phase 9
 Resume file: None
 
-Next: Execute Phase 8 Plan 2 (`/gsd:execute-phase 08-02`) - AddressBookService Write Methods
+Next: Plan Phase 9 (`/gsd:plan-phase 9`) - Calendar Write Tools
 
 ---
-*State updated: 2026-01-27 after completing 08-01-PLAN.md*
+*State updated: 2026-01-27 after completing Phase 8 Plan 2*
