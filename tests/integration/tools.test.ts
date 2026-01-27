@@ -77,11 +77,11 @@ describe('MCP Tool Registration', () => {
     await serverTransport.close();
   });
 
-  it('should register all 15 tools', async () => {
+  it('should register all 16 tools', async () => {
     const response = await client.listTools();
 
     expect(response.tools).toBeDefined();
-    expect(response.tools).toHaveLength(15);
+    expect(response.tools).toHaveLength(16);
   });
 
   it('should register tools with correct names', async () => {
@@ -89,6 +89,7 @@ describe('MCP Tool Registration', () => {
 
     const toolNames = response.tools.map((tool) => tool.name).sort();
     const expectedNames = [
+      'check_availability',
       'create_contact',
       'create_event',
       'delete_contact',
@@ -326,6 +327,78 @@ describe('MCP Tool Registration', () => {
     expect(tool!.inputSchema.required).toBeDefined();
     expect(tool!.inputSchema.required).toContain('uid');
     expect('addressbook' in properties).toBe(true);
+  });
+
+  it('should register check_availability with required start, end parameters', async () => {
+    const response = await client.listTools();
+    const tool = response.tools.find((t) => t.name === 'check_availability');
+    expect(tool).toBeDefined();
+    expect(tool!.inputSchema).toBeDefined();
+    expect(tool!.inputSchema.properties).toBeDefined();
+    const properties = tool!.inputSchema.properties!;
+    expect('start' in properties).toBe(true);
+    expect('end' in properties).toBe(true);
+    expect('calendar' in properties).toBe(true);
+    expect(tool!.inputSchema.required).toBeDefined();
+    expect(tool!.inputSchema.required).toContain('start');
+    expect(tool!.inputSchema.required).toContain('end');
+  });
+
+  it('should have readOnlyHint: true on all read tools', async () => {
+    const response = await client.listTools();
+    const readToolNames = [
+      'check_availability',
+      'get_contact_details',
+      'get_events_in_range',
+      'get_next_event',
+      'get_todays_schedule',
+      'list_addressbooks',
+      'list_calendars',
+      'list_contacts',
+      'search_contacts',
+      'search_events',
+    ];
+
+    for (const name of readToolNames) {
+      const tool = response.tools.find((t) => t.name === name);
+      expect(tool).toBeDefined();
+      expect((tool as any).annotations?.readOnlyHint).toBe(true);
+    }
+  });
+
+  it('should have destructiveHint: false on create tools', async () => {
+    const response = await client.listTools();
+    const createToolNames = ['create_event', 'create_contact'];
+
+    for (const name of createToolNames) {
+      const tool = response.tools.find((t) => t.name === name);
+      expect(tool).toBeDefined();
+      expect((tool as any).annotations?.readOnlyHint).toBe(false);
+      expect((tool as any).annotations?.destructiveHint).toBe(false);
+    }
+  });
+
+  it('should have destructiveHint: true on update and delete tools', async () => {
+    const response = await client.listTools();
+    const destructiveToolNames = [
+      'update_event', 'delete_event',
+      'update_contact', 'delete_contact',
+    ];
+
+    for (const name of destructiveToolNames) {
+      const tool = response.tools.find((t) => t.name === name);
+      expect(tool).toBeDefined();
+      expect((tool as any).annotations?.readOnlyHint).toBe(false);
+      expect((tool as any).annotations?.destructiveHint).toBe(true);
+    }
+  });
+
+  it('should have openWorldHint: true on all tools', async () => {
+    const response = await client.listTools();
+
+    for (const tool of response.tools) {
+      expect((tool as any).annotations?.openWorldHint).toBe(true);
+    }
   });
 
   it('should include confirmation instruction in all write tool descriptions', async () => {

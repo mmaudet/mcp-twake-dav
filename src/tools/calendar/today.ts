@@ -38,6 +38,11 @@ export function registerTodaysScheduleTool(
         (defaultCalendar ? `Defaults to "${defaultCalendar}".` : 'Defaults to all calendars.')
       ),
     },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     async (params) => {
       try {
         logger.debug('get_todays_schedule called');

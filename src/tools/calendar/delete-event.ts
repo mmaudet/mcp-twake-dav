@@ -34,6 +34,11 @@ export function registerDeleteEventTool(
         (defaultCalendar ? `Defaults to "${defaultCalendar}".` : 'Defaults to all calendars.')
       ),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
+    },
     async (params) => {
       try {
         logger.debug({ params }, 'delete_event called');

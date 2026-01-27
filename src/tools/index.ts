@@ -2,7 +2,8 @@
  * MCP tool registration aggregator
  *
  * Registers all calendar query tools (Phase 4), contact query tools (Phase 5),
- * calendar write tools (Phase 9), and contact write tools (Phase 10).
+ * calendar write tools (Phase 9), contact write tools (Phase 10),
+ * and check_availability + MCP annotations (Phase 11).
  */
 
 import { z } from 'zod';
@@ -23,6 +24,7 @@ import { registerListContactsTool } from './contacts/list.js';
 import { registerDeleteContactTool } from './contacts/delete-contact.js';
 import { registerCreateContactTool } from './contacts/create-contact.js';
 import { registerUpdateContactTool } from './contacts/update-contact.js';
+import { registerCheckAvailabilityTool } from './calendar/check-availability.js';
 
 /**
  * Register all MCP tools
@@ -31,6 +33,7 @@ import { registerUpdateContactTool } from './contacts/update-contact.js';
  * Phase 5: Registers contact query tools (CON-01 through CON-04)
  * Phase 9: Registers calendar write tools (CALW-01 through CALW-03)
  * Phase 10: Registers contact write tools (CONW-01 through CONW-03)
+ * Phase 11: Registers check_availability (ADV-01) and MCP annotations on all tools
  *
  * @param server - MCP server instance
  * @param calendarService - Calendar service for calendar tools
@@ -56,11 +59,19 @@ export function registerAllTools(
   registerCreateEventTool(server, calendarService, logger, defaultCalendar);
   registerUpdateEventTool(server, calendarService, logger, defaultCalendar);
 
+  // Register check_availability tool (Phase 11)
+  registerCheckAvailabilityTool(server, calendarService, logger, defaultCalendar);
+
   // Register list_calendars tool inline (CAL-05)
   server.tool(
     'list_calendars',
     'List all available calendars for the authenticated user.',
     {},
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     async () => {
       try {
         logger.debug('list_calendars called');
@@ -130,6 +141,11 @@ export function registerAllTools(
     'list_addressbooks',
     'List all available address books for the authenticated user.',
     {},
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     async () => {
       try {
         logger.debug('list_addressbooks called');

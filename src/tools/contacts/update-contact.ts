@@ -40,6 +40,11 @@ export function registerUpdateContactTool(
         (defaultAddressBook ? `Defaults to "${defaultAddressBook}" or all address books.` : 'Defaults to all address books.')
       ),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
+    },
     async (params) => {
       try {
         logger.debug({ params }, 'update_contact called');

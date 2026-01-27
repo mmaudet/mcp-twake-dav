@@ -35,6 +35,11 @@ export function registerListContactsTool(
         (defaultAddressBook ? `Defaults to "${defaultAddressBook}".` : 'Defaults to all address books.')
       ),
     },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     async (params) => {
       try {
         logger.debug('list_contacts called');

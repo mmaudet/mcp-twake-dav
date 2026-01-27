@@ -43,6 +43,11 @@ export function registerUpdateEventTool(
         (defaultCalendar ? `Defaults to "${defaultCalendar}".` : 'Defaults to all calendars.')
       ),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
+    },
     async (params) => {
       try {
         logger.debug({ params }, 'update_event called');

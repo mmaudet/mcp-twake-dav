@@ -34,6 +34,11 @@ export function registerDeleteContactTool(
         (defaultAddressBook ? `Defaults to "${defaultAddressBook}".` : 'Defaults to all address books.')
       ),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
+    },
     async (params) => {
       try {
         logger.debug({ params }, 'delete_contact called');

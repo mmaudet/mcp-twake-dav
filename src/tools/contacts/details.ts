@@ -37,6 +37,11 @@ export function registerGetContactDetailsTool(
         (defaultAddressBook ? `Defaults to "${defaultAddressBook}".` : 'Defaults to all address books.')
       ),
     },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     async (params) => {
       try {
         logger.debug({ params }, 'get_contact_details called');

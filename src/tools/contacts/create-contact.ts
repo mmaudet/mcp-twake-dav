@@ -38,6 +38,11 @@ export function registerCreateContactTool(
         (defaultAddressBook ? `Defaults to "${defaultAddressBook}".` : 'Defaults to first address book.')
       ),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     async (params) => {
       try {
         logger.debug({ params }, 'create_contact called');

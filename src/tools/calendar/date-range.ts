@@ -38,6 +38,11 @@ export function registerDateRangeTool(
         (defaultCalendar ? `Defaults to "${defaultCalendar}".` : 'Defaults to all calendars.')
       ),
     },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     async (params) => {
       try {
         logger.debug({ params }, 'get_events_in_range called');

@@ -39,6 +39,11 @@ export function registerSearchContactsTool(
         (defaultAddressBook ? `Defaults to "${defaultAddressBook}".` : 'Defaults to all address books.')
       ),
     },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     async (params) => {
       try {
         logger.debug({ params }, 'search_contacts called');
