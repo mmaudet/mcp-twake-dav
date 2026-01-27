@@ -352,7 +352,11 @@ Plans:
 7. All three tool descriptions include "IMPORTANT: Confirm with the user before proceeding"
 8. Round-trip verified: create -> read -> update -> read -> delete -> verify gone
 
-**Plans:** TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 09-01-PLAN.md -- delete_event + create_event tool modules (new files only)
+- [ ] 09-02-PLAN.md -- update_event tool + wire all 3 into registry + update integration tests
 
 **Notes:**
 - New files: `src/tools/calendar/delete-event.ts`, `src/tools/calendar/create-event.ts`, `src/tools/calendar/update-event.ts`
@@ -475,4 +479,4 @@ Plans:
 
 ---
 
-*Last updated: 2026-01-27 after Phase 8 completion*
+*Last updated: 2026-01-27 after Phase 9 planning*
