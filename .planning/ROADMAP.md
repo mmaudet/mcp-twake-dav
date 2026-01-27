@@ -14,7 +14,7 @@ v2 follows a bottom-up build: reverse transformers and write infrastructure firs
 ## Milestones
 
 - COMPLETE **v1 -- Read-Only MCP Server** - Phases 1-6 (shipped 2026-01-27)
-- ACTIVE **v2 -- Write Operations & Free/Busy** - Phases 7-11 (in progress)
+- COMPLETE **v2 -- Write Operations & Free/Busy** - Phases 7-11 (shipped 2026-01-27)
 
 ## Phases
 
@@ -433,8 +433,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 11-01-PLAN.md -- check_availability tool with dual-path free/busy (server-side + client-side fallback) and supporting utilities
-- [ ] 11-02-PLAN.md -- MCP annotations on all 16 tools + wire check_availability into registry + update integration tests
+- [x] 11-01-PLAN.md -- check_availability tool with dual-path free/busy (server-side + client-side fallback) and supporting utilities
+- [x] 11-02-PLAN.md -- MCP annotations on all 16 tools + wire check_availability into registry + update integration tests
 
 **Notes:**
 - New files: `src/tools/calendar/check-availability.ts`
@@ -445,7 +445,7 @@ Plans:
 - Uses chrono-node for natural language date support on start/end
 - This is the only purely read-only addition in v2, making it a natural final phase
 
-**Status:** Not Started
+**Status:** Complete (2026-01-27)
 
 ---
 
@@ -465,11 +465,11 @@ Plans:
 | 8 - Service Layer Write Methods | v2 | WINF-01 (complete), WINF-02 | Complete | 100% |
 | 9 - Calendar Write Tools | v2 | CALW-01, CALW-02, CALW-03, WINF-05 (cal) | Complete | 100% |
 | 10 - Contact Write Tools | v2 | CONW-01, CONW-02, CONW-03, WINF-05 (con) | Complete | 100% |
-| 11 - Free/Busy & MCP Annotations | v2 | ADV-01, WINF-04 | Not Started | 0% |
+| 11 - Free/Busy & MCP Annotations | v2 | ADV-01, WINF-04 | Complete | 100% |
 
 **v1:** 18/18 requirements complete (100%)
-**v2:** 10/12 requirements complete (83%)
-**Overall:** 28/30 requirements complete (93%)
+**v2:** 12/12 requirements complete (100%)
+**Overall:** 30/30 requirements complete (100%)
 
 ## Milestone Status
 
@@ -479,12 +479,13 @@ Plans:
 - Published to npm as mcp-twake@0.1.1
 - Audit: PASS
 
-**v2 Milestone: IN PROGRESS**
-- 10/12 requirements delivered
-- 5 phases planned (7-11)
-- 7 new MCP tools to build (16 total)
-- Zero new dependencies required
+**v2 Milestone: COMPLETE** (2026-01-27)
+- 12/12 requirements delivered
+- 5 phases executed (7-11)
+- 7 new MCP tools delivered (16 total)
+- Zero new dependencies added
+- 91 tests passing (6 test files)
 
 ---
 
-*Last updated: 2026-01-27 after Phase 11 planning*
+*Last updated: 2026-01-27 after Phase 11 execution -- v2 COMPLETE*

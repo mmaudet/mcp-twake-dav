@@ -100,7 +100,7 @@
 
 ### Availability
 
-- [ ] **ADV-01**: User can check free/busy availability via `check_availability` tool
+- [x] **ADV-01**: User can check free/busy availability via `check_availability` tool
   - Parameters: start (required), end (required), calendar (optional)
   - Dual-path: server-side free-busy-query REPORT (RFC 4791 s7.10) with automatic client-side fallback
   - Client-side fallback: fetches events in range, computes busy periods (excludes TRANSPARENT events)
@@ -110,22 +110,22 @@
 
 ### Write Infrastructure
 
-- [ ] **WINF-01**: Write operations use ETag-based optimistic concurrency control
+- [x] **WINF-01**: Write operations use ETag-based optimistic concurrency control
   - Creates use `If-None-Match: *` (tsdav automatic)
   - Updates use `If-Match: <current-etag>`
   - Deletes use `If-Match: <current-etag>` with fresh ETag fetch if missing
   - 412 Precondition Failed -> ConflictError with AI-friendly message
 
-- [ ] **WINF-02**: Cache invalidated after every successful write operation
+- [x] **WINF-02**: Cache invalidated after every successful write operation
   - `CollectionCache.invalidate(collectionUrl)` called after create/update/delete
   - Subsequent reads return fresh data
 
-- [ ] **WINF-03**: Updates preserve all existing iCalendar/vCard properties (non-lossy round-trip)
+- [x] **WINF-03**: Updates preserve all existing iCalendar/vCard properties (non-lossy round-trip)
   - Parse `_raw` with ical.js -> modify specific properties -> re-serialize
   - VALARM, X-properties, ATTENDEE parameters, PHOTO, custom fields all survive
   - Never build from scratch during updates
 
-- [ ] **WINF-04**: MCP tool annotations applied to all tools (read and write)
+- [x] **WINF-04**: MCP tool annotations applied to all tools (read and write)
   - Write tools: `destructiveHint: true` (update/delete), `readOnlyHint: false`
   - Create tools: `destructiveHint: false`, `readOnlyHint: false`
   - Read tools: `readOnlyHint: true`
@@ -187,18 +187,18 @@
 | CONW-01 | Phase 10 | Complete |
 | CONW-02 | Phase 10 | Complete |
 | CONW-03 | Phase 10 | Complete |
-| ADV-01 | Phase 11 | Pending |
+| ADV-01 | Phase 11 | Complete |
 | WINF-01 | Phase 7-8 | Complete |
 | WINF-02 | Phase 8 | Complete |
 | WINF-03 | Phase 7 | Complete |
-| WINF-04 | Phase 11 | Pending |
+| WINF-04 | Phase 11 | Complete |
 | WINF-05 | Phase 9-10 | Complete |
 
 **Coverage:**
 - v1 requirements: 18 total -- 18 complete
-- v2 requirements: 12 total -- 10 complete
-- Total: 30 requirements (28 complete)
+- v2 requirements: 12 total -- 12 complete
+- Total: 30 requirements (30 complete)
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 -- CONW-01, CONW-02, CONW-03, WINF-05 marked complete after Phase 10*
+*Last updated: 2026-01-27 -- ADV-01, WINF-01, WINF-02, WINF-03, WINF-04 marked complete after Phase 11 -- ALL v2 REQUIREMENTS COMPLETE*
