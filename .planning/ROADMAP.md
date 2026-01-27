@@ -32,12 +32,18 @@ Phases progress from infrastructure to user-facing features, with each phase del
 4. Connection to CalDAV/CardDAV server succeeds with Basic Auth credentials
 5. Invalid credentials produce AI-friendly error message suggesting credential check
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 01-PLAN-01.md — Project scaffolding + configuration validation + stderr logger
+- [ ] 01-PLAN-02.md — CalDAV client wrapper + AI-friendly errors + MCP stdio entry point
+
 **Notes:**
 - Addresses critical pitfall 1 (stdout contamination) and 5 (HTTP security)
 - Establishes Pino logger configured with destination: stderr
 - Zod schemas validate all configuration at startup (fail-fast)
 
-**Status:** Pending
+**Status:** Planned
 
 ---
 
