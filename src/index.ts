@@ -34,7 +34,7 @@ async function main() {
 
     // Step 2: Initialize logger (uses config.LOG_LEVEL)
     const logger = createLogger(config.LOG_LEVEL);
-    logger.info({ version: '0.1.0' }, 'Starting mcp-twake server');
+    logger.info({ version: '0.1.1' }, 'Starting mcp-twake server');
 
     // Step 3: Create dual CalDAV/CardDAV clients
     const clients = await createDualClients(config, logger);
