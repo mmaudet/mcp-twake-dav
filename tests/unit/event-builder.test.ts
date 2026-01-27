@@ -95,9 +95,9 @@ describe('buildICalString', () => {
     const dtstart = vevent!.getFirstProperty('dtstart');
     const dtend = vevent!.getFirstProperty('dtend');
 
-    // Verify VALUE=DATE parameter
-    expect(dtstart!.getParameter('value')).toBe('date');
-    expect(dtend!.getParameter('value')).toBe('date');
+    // Verify VALUE=DATE parameter in serialized output
+    expect(result).toContain('DTSTART;VALUE=DATE:20250315');
+    expect(result).toContain('DTEND;VALUE=DATE:20250316');
 
     // Verify date format (YYYYMMDD, no time component)
     const dtstartValue = dtstart!.getFirstValue();
