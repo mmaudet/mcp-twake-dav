@@ -146,8 +146,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Install chrono-node + shared calendar query utilities (date parsing, formatting, filtering, recurrence expansion)
-- [ ] 04-02-PLAN.md — Create MCP calendar tools (5 tools) + wire into entry point
+- [x] 04-01-PLAN.md — Install chrono-node + shared calendar query utilities (date parsing, formatting, filtering, recurrence expansion)
+- [x] 04-02-PLAN.md — Create MCP calendar tools (5 tools) + wire into entry point
 
 **Notes:**
 - Uses chrono-node for natural language date parsing ("tomorrow", "next week")
@@ -156,7 +156,7 @@ Plans:
 - Concise event formatting optimized for LLM context windows (no _raw, no etag)
 - Recurring event expansion via Phase 2 infrastructure (ical.js RRULE)
 
-**Status:** Pending
+**Status:** Complete
 
 ---
 
@@ -227,20 +227,18 @@ Plans:
 | 1 - Foundation & Configuration | INF-05, INF-06, INF-01, INF-02 | Complete | 100% |
 | 2 - Data Transformation | INF-03 | Complete | 100% |
 | 3 - CalDAV/CardDAV Client | CAL-05, CAL-06, INF-04 | Complete | 100% |
-| 4 - Calendar Query Services | CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08 | Pending | 0% |
+| 4 - Calendar Query Services | CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08 | Complete | 100% |
 | 5 - Contact Query Services | CON-01, CON-02, CON-03, CON-04 | Pending | 0% |
 | 6 - MCP Integration & Testing | (validation) | Pending | 0% |
 
-**Overall:** 8/18 requirements complete (44%)
+**Overall:** 14/18 requirements complete (78%)
 
 ## Next Steps
 
-1. Plan Phase 4: Calendar Query Services (CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08)
-2. Execute Phase 4
-3. Plan Phase 5: Contact Query Services (CON-01, CON-02, CON-03, CON-04)
-4. Execute Phase 5
-5. Phase 6: MCP Integration & Testing (end-to-end validation)
+1. Plan Phase 5: Contact Query Services (CON-01, CON-02, CON-03, CON-04)
+2. Execute Phase 5
+3. Phase 6: MCP Integration & Testing (end-to-end validation)
 
 ---
 
-*Last updated: 2026-01-27 after Phase 3 completion*
+*Last updated: 2026-01-27 after Phase 4 completion*

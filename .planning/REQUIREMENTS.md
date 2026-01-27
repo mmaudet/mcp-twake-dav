@@ -7,17 +7,17 @@
 
 ### Calendar Query
 
-- [ ] **CAL-01**: User can ask for their next upcoming event across all calendars
-- [ ] **CAL-02**: User can ask for today's schedule (all events today)
-- [ ] **CAL-03**: User can ask for events over a date range (this week, next month, etc.)
-- [ ] **CAL-04**: User can search events by keyword or attendee name
+- [x] **CAL-01**: User can ask for their next upcoming event across all calendars
+- [x] **CAL-02**: User can ask for today's schedule (all events today)
+- [x] **CAL-03**: User can ask for events over a date range (this week, next month, etc.)
+- [x] **CAL-04**: User can search events by keyword or attendee name
 
 ### Calendar Management
 
 - [x] **CAL-05**: User can list all available calendars
 - [x] **CAL-06**: Server queries across all calendars by default (multi-calendar)
-- [ ] **CAL-07**: Recurring events are expanded into individual occurrences (RRULE)
-- [ ] **CAL-08**: Events are displayed in correct timezone
+- [x] **CAL-07**: Recurring events are expanded into individual occurrences (RRULE)
+- [x] **CAL-08**: Events are displayed in correct timezone
 
 ### Contact Query
 
@@ -79,14 +79,14 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CAL-01 | Phase 4 | Pending |
-| CAL-02 | Phase 4 | Pending |
-| CAL-03 | Phase 4 | Pending |
-| CAL-04 | Phase 4 | Pending |
+| CAL-01 | Phase 4 | Complete |
+| CAL-02 | Phase 4 | Complete |
+| CAL-03 | Phase 4 | Complete |
+| CAL-04 | Phase 4 | Complete |
 | CAL-05 | Phase 3 | Complete |
 | CAL-06 | Phase 3 | Complete |
-| CAL-07 | Phase 4 | Pending |
-| CAL-08 | Phase 4 | Pending |
+| CAL-07 | Phase 4 | Complete |
+| CAL-08 | Phase 4 | Complete |
 | CON-01 | Phase 5 | Pending |
 | CON-02 | Phase 5 | Pending |
 | CON-03 | Phase 5 | Pending |
@@ -105,4 +105,4 @@
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 after Phase 3 completion*
+*Last updated: 2026-01-27 after Phase 4 completion*
