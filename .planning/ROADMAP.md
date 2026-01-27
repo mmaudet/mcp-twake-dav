@@ -103,11 +103,11 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Retry utility + cache types + CTag-based collection cache
-- [ ] 03-02-PLAN.md — Dual-client factory (CalDAV + CardDAV) + discovery service
-- [ ] 03-03-PLAN.md — Calendar service (list, fetch, multi-calendar aggregation with cache + retry)
-- [ ] 03-04-PLAN.md — Address book service (list, fetch, multi-addressbook aggregation with cache + retry)
-- [ ] 03-05-PLAN.md — Wire dual clients and services into startup flow (index.ts)
+- [x] 03-01-PLAN.md — Retry utility + cache types + CTag-based collection cache
+- [x] 03-02-PLAN.md — Dual-client factory (CalDAV + CardDAV) + discovery service
+- [x] 03-03-PLAN.md — Calendar service (list, fetch, multi-calendar aggregation with cache + retry)
+- [x] 03-04-PLAN.md — Address book service (list, fetch, multi-addressbook aggregation with cache + retry)
+- [x] 03-05-PLAN.md — Wire dual clients and services into startup flow (index.ts)
 
 **Notes:**
 - CRITICAL PATH: If tsdav doesn't work with SabreDAV, may need architecture changes
@@ -116,7 +116,7 @@ Plans:
 - Early prototype against real SabreDAV server recommended
 - Research flag: HIGH (compatibility validation required)
 
-**Status:** Planned
+**Status:** Complete
 
 ---
 
@@ -219,21 +219,21 @@ Plans:
 |-------|--------------|--------|------------|
 | 1 - Foundation & Configuration | INF-05, INF-06, INF-01, INF-02 | Complete | 100% |
 | 2 - Data Transformation | INF-03 | Complete | 100% |
-| 3 - CalDAV/CardDAV Client | CAL-05, CAL-06, INF-04 | Planned | 0% |
+| 3 - CalDAV/CardDAV Client | CAL-05, CAL-06, INF-04 | Complete | 100% |
 | 4 - Calendar Query Services | CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08 | Pending | 0% |
 | 5 - Contact Query Services | CON-01, CON-02, CON-03, CON-04 | Pending | 0% |
 | 6 - MCP Integration & Testing | (validation) | Pending | 0% |
 
-**Overall:** 5/18 requirements complete (28%)
+**Overall:** 8/18 requirements complete (44%)
 
 ## Next Steps
 
-1. Execute Phase 3: CalDAV/CardDAV Client Integration (CRITICAL PATH)
-2. Wave 1: Plans 03-01 (retry + cache) and 03-02 (dual-client + discovery) in parallel
-3. Wave 2: Plans 03-03 (calendar service) and 03-04 (addressbook service) in parallel
-4. Wave 3: Plan 03-05 (wire into index.ts)
-5. Verify Phase 3 completion (CAL-05, CAL-06, INF-04 requirements)
+1. Plan Phase 4: Calendar Query Services (CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08)
+2. Execute Phase 4
+3. Plan Phase 5: Contact Query Services (CON-01, CON-02, CON-03, CON-04)
+4. Execute Phase 5
+5. Phase 6: MCP Integration & Testing (end-to-end validation)
 
 ---
 
-*Last updated: 2026-01-27 after Phase 3 planning*
+*Last updated: 2026-01-27 after Phase 3 completion*

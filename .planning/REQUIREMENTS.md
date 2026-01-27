@@ -14,8 +14,8 @@
 
 ### Calendar Management
 
-- [ ] **CAL-05**: User can list all available calendars
-- [ ] **CAL-06**: Server queries across all calendars by default (multi-calendar)
+- [x] **CAL-05**: User can list all available calendars
+- [x] **CAL-06**: Server queries across all calendars by default (multi-calendar)
 - [ ] **CAL-07**: Recurring events are expanded into individual occurrences (RRULE)
 - [ ] **CAL-08**: Events are displayed in correct timezone
 
@@ -31,7 +31,7 @@
 - [x] **INF-01**: Server authenticates to CalDAV/CardDAV via basic auth (env vars)
 - [x] **INF-02**: Errors return AI-friendly messages the LLM can relay to users
 - [x] **INF-03**: Raw iCalendar/vCard data preserved alongside parsed fields
-- [ ] **INF-04**: ETag/CTag-based caching for performance
+- [x] **INF-04**: ETag/CTag-based caching for performance
 - [x] **INF-05**: Server runs over stdio transport (MCP SDK)
 - [x] **INF-06**: Configuration via environment variables (CALDAV_URL, CALDAV_USERNAME, CALDAV_PASSWORD)
 
@@ -83,8 +83,8 @@
 | CAL-02 | Phase 4 | Pending |
 | CAL-03 | Phase 4 | Pending |
 | CAL-04 | Phase 4 | Pending |
-| CAL-05 | Phase 3 | Pending |
-| CAL-06 | Phase 3 | Pending |
+| CAL-05 | Phase 3 | Complete |
+| CAL-06 | Phase 3 | Complete |
 | CAL-07 | Phase 4 | Pending |
 | CAL-08 | Phase 4 | Pending |
 | CON-01 | Phase 5 | Pending |
@@ -94,7 +94,7 @@
 | INF-01 | Phase 1 | Complete |
 | INF-02 | Phase 1 | Complete |
 | INF-03 | Phase 2 | Complete |
-| INF-04 | Phase 3 | Pending |
+| INF-04 | Phase 3 | Complete |
 | INF-05 | Phase 1 | Complete |
 | INF-06 | Phase 1 | Complete |
 
@@ -105,4 +105,4 @@
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 after Phase 2 completion*
+*Last updated: 2026-01-27 after Phase 3 completion*
