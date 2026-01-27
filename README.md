@@ -1,8 +1,10 @@
 # mcp-twake
 
-**MCP server for [Twake.ai](https://www.twake.ai/) — integrate your sovereign Digital Workplace with any MCP-compatible AI assistant**
+[![npm version](https://img.shields.io/npm/v/mcp-twake)](https://www.npmjs.com/package/mcp-twake)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
 
-**License:** AGPL-3.0
+**MCP server for [Twake.ai](https://www.twake.ai/) — integrate your sovereign Digital Workplace with any MCP-compatible AI assistant**
 
 ## Overview
 
@@ -285,13 +287,7 @@ Built by LINAGORA to enable sovereign infrastructure for AI-powered calendar and
 
 ## Contributing
 
-This is an open-source project under the AGPL-3.0 license. Contributions are welcome!
-
-When contributing:
-- Ensure your code follows the existing TypeScript patterns
-- Add tests for new functionality
-- Update documentation as needed
-- Respect the AGPL-3.0 license terms (modifications must be shared)
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on the development workflow, code style, and pull request process.
 
 ## Support
 
