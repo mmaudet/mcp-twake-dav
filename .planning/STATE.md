@@ -2,49 +2,49 @@
 
 **Last Updated:** 2026-01-27
 **Current Phase:** 4 of 6 - Calendar Query Services
-**Current Plan:** 1 of 2 (In progress)
+**Current Plan:** 2 of 2 (Complete)
 
 ## Project Reference
 
 **Core Value:** Users can ask an AI assistant questions about their CalDAV calendars and CardDAV contacts and get accurate answers from their own sovereign infrastructure.
 
-**Current Focus:** Phase 4 - Calendar Query Services
+**Current Focus:** Phase 4 - Calendar Query Services (COMPLETE)
 
 ## Current Position
 
 **Phase:** 4 of 6 - Calendar Query Services
 
-**Plan:** 1 of 2 (In progress)
+**Plan:** 2 of 2 (Complete)
 
-**Status:** Phase 4 in progress
+**Status:** ✓ PHASE 4 COMPLETE
 
-**Last activity:** 2026-01-27 - Completed 04-01-PLAN.md (Shared Calendar Query Utilities)
+**Last activity:** 2026-01-27 - Completed 04-02-PLAN.md (Calendar MCP Tools)
 
 **Progress:**
 ```
-[█████████░░░░░░░░░░░] 50% (9/18 requirements)
+[███████████████░░░░░] 83% (15/18 requirements)
 ```
 
 **Milestone:** v1 - Read-only CalDAV/CardDAV MCP Server
 
 ## Performance Metrics
 
-**Velocity:** 3.3 minutes per plan (average of 01-01, 01-02, 02-01, 02-02, 03-01)
+**Velocity:** 2.9 minutes per plan (average of recent plans)
 
 **Phase Stats:**
 - Phase 1: 4/4 requirements ✓ COMPLETE
 - Phase 2: 1/1 requirements ✓ COMPLETE
 - Phase 3: 3/3 requirements ✓ COMPLETE
-- Phase 4: 1/6 requirements (CAL-07)
+- Phase 4: 6/6 requirements ✓ COMPLETE (CAL-01 through CAL-08)
 - Phase 5: 0/4 requirements
 - Phase 6: 0/0 requirements (validation)
 
 **Recent Completions:**
+- 2026-01-27: 04-02 - Calendar MCP Tools (2.1 minutes, 2 tasks) ✓ PHASE 4 COMPLETE
 - 2026-01-27: 04-01 - Shared Calendar Query Utilities (~2 minutes, 2 tasks)
 - 2026-01-27: 03-05 - Startup Wiring (2 minutes, 2 tasks) ✓ PHASE 3 COMPLETE
 - 2026-01-27: 03-04 - AddressBook Service (2 minutes, 1 task)
 - 2026-01-27: 03-03 - Calendar Service (timing unknown, 1 task)
-- 2026-01-27: 03-02 - Dual Client and Discovery (timing unknown, 2 tasks)
 
 ## Accumulated Context
 
@@ -89,6 +89,10 @@
 | 50-event truncation in getEventsWithRecurrenceExpansion | Prevents runaway expansion, protects against unbounded recurring events | 4 | 2026-01-27 |
 | Case-insensitive search by default | Better UX - users shouldn't need exact case matching for keywords/attendees | 4 | 2026-01-27 |
 | Shared utils module for Phase 4 tools | DRY principle - all calendar tools share date parsing, formatting, filtering logic | 4 | 2026-01-27 |
+| MCP tools registered before server.connect() | MCP protocol requires tool registration before transport connection for discoverability | 4 | 2026-01-27 |
+| Calendar filter deferred to v2 | DAVCalendarObject doesn't carry calendar name; requires service layer changes | 4 | 2026-01-27 |
+| list_calendars tool inline in aggregator | Simple tool (single service call), avoid file proliferation | 4 | 2026-01-27 |
+| 30-day default for search_events | Balances performance (bounded query) with UX (typical upcoming meetings use case) | 4 | 2026-01-27 |
 
 ### Active TODOs
 
@@ -151,16 +155,16 @@ None currently.
 
 ## Session Continuity
 
-**Last Session:** 2026-01-27 - Phase 4 in progress
+**Last Session:** 2026-01-27 - Phase 4 complete
 
-**Stopped at:** Completed 04-01-PLAN.md (Shared Calendar Query Utilities)
+**Stopped at:** Completed 04-02-PLAN.md (Calendar MCP Tools) ✓ PHASE 4 COMPLETE
 
 **Resume file:** None
 
 **Next Session Should:**
-1. Execute 04-02 (Calendar MCP Tools)
-2. Plan Phase 5 (Contact Query Services)
-3. Execute Phase 5
+1. Plan Phase 5 (Contact Query Services)
+2. Execute Phase 5 plans
+3. Plan and execute Phase 6 (Integration Testing)
 
 **Context for Next Developer:**
 - This is a TypeScript MCP server for CalDAV/CardDAV (read-only v1)
@@ -168,11 +172,12 @@ None currently.
 - ✓ Phase 1 COMPLETE: ESM project, config validation, stderr logging, HTTPS enforcement, CalDAV client wrapper, MCP entry point, AI-friendly errors
 - ✓ Phase 2 COMPLETE: EventDTO/ContactDTO types, event/contact transformers, timezone registration, RRULE expansion
 - ✓ Phase 3 COMPLETE: Dual tsdav clients, discovery, calendar/addressbook services, cache, retry, startup wiring
-- ✓ Phase 4 partial (1/2): chrono-node installed, shared calendar query utilities module created (date parsing, formatting, filtering, recurrence expansion)
+- ✓ Phase 4 COMPLETE: 5 MCP calendar tools (get_next_event, get_todays_schedule, get_events_in_range, search_events, list_calendars), tool registration aggregator, wired into src/index.ts
 - Server creates dual CalDAV/CardDAV clients at startup
-- CalendarService and AddressBookService initialized and ready for tool registration
+- CalendarService and AddressBookService initialized and available
 - CTag-based caching and retry infrastructure operational
-- Calendar utilities ready for MCP tool implementations (next event, today's schedule, date range query, search)
+- MCP tools registered before server.connect() for discoverability
+- Tool pattern established: Zod schemas, try/catch, formatEvent/formatEventTime utilities
 
 **Open Questions:**
 - Will tsdav work with SabreDAV? (to be tested during Phase 6 integration testing)
