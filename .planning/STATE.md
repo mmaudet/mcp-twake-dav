@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-27
 **Current Phase:** 3 of 6 - CalDAV/CardDAV Client Integration
-**Current Plan:** 5 plans in 3 waves (planned, checked, ready to execute)
+**Current Plan:** 2 of 5 complete (03-01, 03-02 complete; 03-03 through 03-05 remaining)
 
 ## Project Reference
 
@@ -18,7 +18,7 @@
 
 **Status:** In progress — executing Wave 1
 
-**Last activity:** 2026-01-27 - Completed 03-02-PLAN.md
+**Last activity:** 2026-01-27 - Completed 03-01-PLAN.md (Cache and Retry Infrastructure)
 
 **Progress:**
 ```
@@ -29,19 +29,18 @@
 
 ## Performance Metrics
 
-**Velocity:** 3.0 minutes per plan (average of 01-01, 01-02, 02-01, 02-02, 03-01, 03-02)
+**Velocity:** 3.3 minutes per plan (average of 01-01, 01-02, 02-01, 02-02, 03-01)
 
 **Phase Stats:**
 - Phase 1: 4/4 requirements ✓ COMPLETE
 - Phase 2: 1/1 requirements ✓ COMPLETE
-- Phase 3: 1/3 requirements (INF-04 complete)
+- Phase 3: 1/3 requirements (INF-04 partial - retry and cache complete)
 - Phase 4: 0/6 requirements
 - Phase 5: 0/4 requirements
 - Phase 6: 0/0 requirements (validation)
 
 **Recent Completions:**
-- 2026-01-27: 03-02 - Dual Client and Discovery (6 minutes, 2 tasks)
-- 2026-01-27: 03-01 - Cache and Retry Infrastructure (4 minutes, 2 tasks)
+- 2026-01-27: 03-01 - Cache and Retry Infrastructure (7 minutes, 2 tasks)
 - 2026-01-27: 02-02 - Contact and Recurrence Transformers (2 minutes, 2 tasks)
 - 2026-01-27: 02-01 - Data Transformation Foundation (2 minutes, 2 tasks)
 - 2026-01-27: Phase 1 verified complete (10/10 must-haves, all 4 requirements)
@@ -79,6 +78,9 @@
 | Services return raw DAV objects (not DTOs) | Transformation deferred to Phase 4/5 query layers | 3 | 2026-01-27 |
 | MultiGet fallback for address books | Some servers lack addressbook-multiget; retry with useMultiGet=false | 3 | 2026-01-27 |
 | 15-second dual validation timeout | Longer than Phase 1's 10s because two parallel discoveries | 3 | 2026-01-27 |
+| Passive cache design | Cache doesn't call tsdav; services call isCollectionDirty then use cache | 3 | 2026-01-27 |
+| Logger from pino (type-only) in infra | Matches transformer pattern; not config/logger.js | 3 | 2026-01-27 |
+| Jitter enabled by default in retry | Prevents thundering herd on simultaneous retries | 3 | 2026-01-27 |
 
 ### Active TODOs
 
@@ -135,14 +137,14 @@ None currently.
 
 ## Session Continuity
 
-**Last Session:** 2026-01-27 - Completed 03-02
+**Last Session:** 2026-01-27 - Completed 03-01
 
-**Stopped at:** Completed 03-02-PLAN.md (Dual Client and Discovery)
+**Stopped at:** Completed 03-01-PLAN.md (Cache and Retry Infrastructure)
 
 **Resume file:** None
 
 **Next Session Should:**
-1. Continue Phase 3 execution (03-03, 03-04, 03-05 remaining)
+1. Continue Phase 3 execution (03-02, 03-03, 03-04, 03-05 remaining)
 2. Verify Phase 3 completion when all 5 plans done
 3. Plan Phase 4
 
