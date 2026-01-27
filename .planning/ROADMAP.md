@@ -180,11 +180,18 @@ Plans:
 5. Contact search handles partial names ("Marie" finds "Marie Dupont")
 6. Contact search handles organization queries ("contacts at LINAGORA")
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Shared contact query utilities (search, format, fetch+transform)
+- [ ] 05-02-PLAN.md — Contact MCP tools (4 tools) + wire into entry point
+
 **Notes:**
-- Implements ContactService with fuzzy name matching and result ranking
-- Searches across all address books by default
-- Organization (ORG) property indexed for company-based queries
-- Returns structured contact data (name, email, phone, address, org)
+- No new dependencies — uses existing AddressBookService (Phase 3) + transformVCard (Phase 2)
+- Case-insensitive partial matching for name and organization searches
+- 30-contact limit on list operations (truncation protection)
+- LLM-optimized formatting (no _raw/etag/url in output)
+- Mirrors Phase 4 calendar tool architecture
 
 **Status:** Pending
 
