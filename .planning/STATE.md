@@ -1,66 +1,83 @@
 # State: mcp-twake
 
 **Last Updated:** 2026-01-27
-**Current Phase:** Not started (defining requirements)
-**Current Plan:** —
+**Current Phase:** Phase 7 - Write Infrastructure & Reverse Transformers
+**Current Plan:** 01 of 1
 
 ## Project Reference
 
-**Core Value:** Users can ask an AI assistant questions about their CalDAV calendars and CardDAV contacts and get accurate answers from their own sovereign infrastructure.
+See: .planning/PROJECT.md (updated 2026-01-27)
 
-**Current Focus:** Milestone v2 — Write Operations & Free/Busy
+**Core Value:** Users can ask an AI assistant questions about their CalDAV calendars and CardDAV contacts and get accurate answers from their own sovereign infrastructure.
+**Current Focus:** Milestone v2 -- Write Operations & Free/Busy
 
 ## Current Position
 
-**Phase:** Not started (defining requirements)
+Phase: 7 of 11 (Write Infrastructure & Reverse Transformers)
+Plan: 1 of 1 (completed)
+Status: Phase complete
+Last activity: 2026-01-27 -- Completed 07-01-PLAN.md
 
-**Plan:** —
+Milestone: v2 - Write Operations & Free/Busy
 
-**Status:** Defining requirements
+Progress: [||||||||||█.........] 60% (v1 complete + 1 v2 plan)
 
-**Last activity:** 2026-01-27 — Milestone v2 started
+## Performance Metrics
 
-**Milestone:** v2 - Write Operations & Free/Busy
+**Velocity:**
+- Total plans completed: 17 (16 v1 + 1 v2)
+- v2 plans completed: 1
+- Total execution time: 1 min (v2 only; v1 metrics not tracked)
+
+**By Phase:**
+
+| Phase | Plans | Status |
+|-------|-------|--------|
+| 1 - Foundation | 2 | Complete (v1) |
+| 2 - Transformation | 2 | Complete (v1) |
+| 3 - Client Integration | 5 | Complete (v1) |
+| 4 - Calendar Query | 2 | Complete (v1) |
+| 5 - Contact Query | 2 | Complete (v1) |
+| 6 - Integration & Testing | 3 | Complete (v1) |
+| 7 - Write Infrastructure | 1 | Complete (v2) |
 
 ## Accumulated Context
 
-### Active Decisions
+### Decisions
 
-Carried from v1:
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
 
-| Decision | Rationale | Phase | Date |
-|----------|-----------|-------|------|
-| TypeScript over Python | Aligns with MCP SDK reference implementation | 1 | 2026-01-27 |
-| tsdav for CalDAV/CardDAV | TypeScript-native, 35k+ weekly downloads, works with SabreDAV | 3 | 2026-01-27 |
-| ical.js for parsing | Zero dependencies, RFC 5545/6350 compliant | 2 | 2026-01-27 |
-| Simple recurring only for v2 | RECURRENCE-ID exception handling complex; whole-series covers 80% | — | 2026-01-27 |
-| AI-guided confirmation | Tool descriptions tell AI to confirm; no code enforcement | — | 2026-01-27 |
+- Simple recurring only for v2 (no RECURRENCE-ID exception handling)
+- AI-guided confirmation (tool descriptions, no code enforcement)
+- No attendees parameter on create_event (SabreDAV auto-sends invitations)
+- vCard 3.0 for creates, preserve existing version on updates
+- Tool name: check_availability (not get_freebusy)
+- Parse-modify-serialize on _raw for updates (never build from scratch)
+- Zero new dependencies for v2
+- ConflictError follows "what went wrong + how to fix" pattern (Phase 7)
+- Write input types separate from read DTOs - CreateXInput/UpdateXInput pattern (Phase 7)
 
-### Known Blockers
+### Pending Todos
+
+None yet.
+
+### Blockers/Concerns
 
 None currently.
 
 ### Research Flags
 
-**Write operations — HIGH:**
-- CalDAV PUT with If-Match (ETag) for conflict detection
-- iCalendar generation (creating valid .ics from user input)
-- vCard generation (creating valid .vcf from user input)
-- tsdav write API surface (createCalendarObject, updateCalendarObject, deleteCalendarObject)
-
-**Free/busy — MEDIUM:**
-- CalDAV free-busy-query REPORT
-- tsdav support for free-busy queries
-- Privacy implications (what to expose)
+- Phase 11 (Free/Busy): MEDIUM -- freeBusyQuery auth header injection, SabreDAV Schedule plugin behavior
+- Phases 7-10: No research needed (patterns verified in v2 research)
 
 ## Session Continuity
 
-**Last Session:** 2026-01-27 — v1 milestone completed, v2 milestone started
+Last session: 2026-01-27 -- Phase 7 Plan 1 complete
+Stopped at: Completed 07-01-PLAN.md (write infrastructure types and error handling)
+Resume file: None
 
-**Next Session Should:**
-1. Complete research (if selected)
-2. Define REQUIREMENTS.md
-3. Create ROADMAP.md
+Next: Plan Phase 8 (`/gsd:plan-phase 8`)
 
 ---
-*State initialized: 2026-01-27 for milestone v2*
+*State updated: 2026-01-27 after completing Phase 7 Plan 1*
