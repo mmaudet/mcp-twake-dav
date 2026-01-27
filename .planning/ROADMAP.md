@@ -430,7 +430,11 @@ Plans:
 7. All 3 delete tools have `destructiveHint: true`, `readOnlyHint: false`, `openWorldHint: true` annotations
 8. `check_availability` has `readOnlyHint: true`, `openWorldHint: true` annotations
 
-**Plans:** TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 11-01-PLAN.md -- check_availability tool with dual-path free/busy (server-side + client-side fallback) and supporting utilities
+- [ ] 11-02-PLAN.md -- MCP annotations on all 16 tools + wire check_availability into registry + update integration tests
 
 **Notes:**
 - New files: `src/tools/calendar/check-availability.ts`
@@ -483,4 +487,4 @@ Plans:
 
 ---
 
-*Last updated: 2026-01-27 after Phase 10 execution and verification*
+*Last updated: 2026-01-27 after Phase 11 planning*
