@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-27
 **Current Phase:** Phase 9 - Calendar Write Tools
-**Current Plan:** 1 of 2 (in progress)
+**Current Plan:** 2 of 2 (complete)
 
 ## Project Reference
 
@@ -14,20 +14,20 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 ## Current Position
 
 Phase: 9 of 11 (Calendar Write Tools)
-Plan: 1 of 2 (in progress)
-Status: Plan 09-01 complete
-Last activity: 2026-01-27 -- Completed 09-01-PLAN.md
+Plan: 2 of 2 (complete)
+Status: Phase complete
+Last activity: 2026-01-27 -- Completed 09-02-PLAN.md
 
 Milestone: v2 - Write Operations & Free/Busy
 
-Progress: [|||||||||||███████..] 76% (v1 complete + 6 v2 plans)
+Progress: [|||||||||||████████.] 79% (v1 complete + 7 v2 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 22 (16 v1 + 6 v2)
-- v2 plans completed: 6
-- Total execution time: 15.3 min (v2 only; v1 metrics not tracked)
+- Total plans completed: 23 (16 v1 + 7 v2)
+- v2 plans completed: 7
+- Total execution time: 18.1 min (v2 only; v1 metrics not tracked)
 
 **By Phase:**
 
@@ -41,7 +41,7 @@ Progress: [|||||||||||███████..] 76% (v1 complete + 6 v2 plans)
 | 6 - Integration & Testing | 3 | Complete (v1) |
 | 7 - Write Infrastructure | 3 of 3 | Complete (v2) |
 | 8 - Service Layer Write Methods | 2 of 2 | Complete (v2) |
-| 9 - Calendar Write Tools | 1 of 2 | In progress (v2) |
+| 9 - Calendar Write Tools | 2 of 2 | Complete (v2) |
 
 ## Accumulated Context
 
@@ -68,6 +68,9 @@ Recent decisions affecting current work:
 - If-None-Match: * on createContact prevents duplicate UIDs via 412 (Phase 8 Plan 2)
 - deleteContact fetches fresh ETag if not provided (Phase 8 Plan 2)
 - findContactByUid/findEventByUid use linear search (acceptable for typical collection sizes) (Phase 8 Plan 2)
+- RRULE preservation check: verify RRULE property exists after updateICalString on recurring events (Phase 9 Plan 2)
+- At least one updatable field must be provided for update_event (title/start/end/description/location) (Phase 9 Plan 2)
+- If start updated but end not, validate new start is not after existing end (Phase 9 Plan 2)
 
 ### Pending Todos
 
@@ -84,11 +87,11 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-01-27 -- Completed Plan 09-01
-Stopped at: Plan 09-01 complete (delete_event and create_event tools created)
+Last session: 2026-01-27 -- Completed Plan 09-02
+Stopped at: Phase 9 complete (all 3 calendar write tools registered and tested)
 Resume file: None
 
-Next: Continue Phase 9 Plan 02 (tool registration) or plan new phase
+Next: Plan Phase 10 (Contact Write Tools) or plan new phase
 
 ---
-*State updated: 2026-01-27 after Plan 09-01 execution*
+*State updated: 2026-01-27 after Plan 09-02 execution*
