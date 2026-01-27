@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-27
 **Current Phase:** 3 of 6 - CalDAV/CardDAV Client Integration
-**Current Plan:** None (phase not yet planned)
+**Current Plan:** 5 plans in 3 waves (planned, checked, ready to execute)
 
 ## Project Reference
 
@@ -14,11 +14,11 @@
 
 **Phase:** 3 of 6 - CalDAV/CardDAV Client Integration
 
-**Plan:** Not yet planned
+**Plan:** 5 plans in 3 waves (03-01 through 03-05)
 
-**Status:** Ready to plan
+**Status:** Planned — ready to execute
 
-**Last activity:** 2026-01-27 - Phase 2 verified and completed (11/11 must-haves)
+**Last activity:** 2026-01-27 - Phase 3 planned and checked (0 blockers, 0 warnings)
 
 **Progress:**
 ```
@@ -71,6 +71,12 @@
 | vCard 3.0 as default | When VERSION missing, default to 3.0 (more common format) | 2 | 2026-01-27 |
 | maxOccurrences=100 for RRULE | Prevents runaway expansion on unbounded recurrence rules | 2 | 2026-01-27 |
 | startDate filter doesn't count toward max | Allows fetching future occurrences without past occurrences consuming limit | 2 | 2026-01-27 |
+| Dual tsdav clients (CalDAV + CardDAV) | tsdav routes discovery via defaultAccountType; separate clients needed | 3 | 2026-01-27 |
+| CTag-based cache with isCollectionDirty | tsdav provides built-in CTag comparison; avoids unnecessary re-fetches | 3 | 2026-01-27 |
+| Hand-rolled retry with exponential backoff | ~20 lines; no need for npm dependency | 3 | 2026-01-27 |
+| Services return raw DAV objects (not DTOs) | Transformation deferred to Phase 4/5 query layers | 3 | 2026-01-27 |
+| MultiGet fallback for address books | Some servers lack addressbook-multiget; retry with useMultiGet=false | 3 | 2026-01-27 |
+| 15-second dual validation timeout | Longer than Phase 1's 10s because two parallel discoveries | 3 | 2026-01-27 |
 
 ### Active TODOs
 
@@ -127,29 +133,30 @@ None currently.
 
 ## Session Continuity
 
-**Last Session:** 2026-01-27 - Phase 2 completed
+**Last Session:** 2026-01-27 - Phase 3 planned
 
-**Stopped at:** Phase 2 complete, ready for Phase 3
+**Stopped at:** Phase 3 planned, ready to execute
 
 **Resume file:** None
 
 **Next Session Should:**
-1. Discuss Phase 3 requirements and approach (`/gsd:discuss-phase 3`)
-2. Plan Phase 3 execution (`/gsd:plan-phase 3`)
-3. Execute Phase 3 (`/gsd:execute-phase 3`)
+1. Execute Phase 3 (`/gsd:execute-phase 3`)
+2. Verify Phase 3 completion
+3. Plan Phase 4
 
 **Context for Next Developer:**
 - This is a TypeScript MCP server for CalDAV/CardDAV (read-only v1)
-- Critical path: Phase 3 CalDAV client validation against SabreDAV
+- Critical path: Phase 3 CalDAV client — tsdav + SabreDAV compatibility
 - ✓ Phase 1 COMPLETE: ESM project, config validation, stderr logging, HTTPS enforcement, CalDAV client wrapper, MCP entry point, AI-friendly errors
 - ✓ Phase 2 COMPLETE: EventDTO/ContactDTO types, event/contact transformers, timezone registration, RRULE expansion
-- Next: Phase 3 - CalDAV Client (fetchCalendarObjects integration with tsdav)
-- Key challenge: tsdav compatibility with SabreDAV not guaranteed
+- Phase 3 PLANNED: 5 plans in 3 waves — dual-client, discovery, calendar/addressbook services, cache, retry, startup wiring
+- Key architecture: dual tsdav clients (CalDAV + CardDAV) with separate `defaultAccountType`
+- Key research: CTag-based caching via `isCollectionDirty()`, multiGet fallback for address books
 
 **Open Questions:**
-- Will tsdav work with SabreDAV? (to be tested in Phase 3)
+- Will tsdav work with SabreDAV? (to be tested during Phase 3 execution)
 
 ---
 
 *State initialized: 2026-01-27*
-*Last execution: 2026-01-27 - Phase 2 verified complete (11/11 must-haves)*
+*Last planning: 2026-01-27 - Phase 3 planned (5 plans, 3 waves, checker passed)*
