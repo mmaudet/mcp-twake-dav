@@ -91,3 +91,119 @@ export interface ContactDTO {
   /** CRITICAL: Complete original vCard text for write operations in v2 */
   _raw: string;
 }
+
+// ============================================================================
+// Write Input Types (v2)
+// ============================================================================
+
+/**
+ * Input parameters for creating a new calendar event
+ *
+ * Used by buildICalString() to generate iCalendar VEVENT from scratch.
+ */
+export interface CreateEventInput {
+  /** Event title (SUMMARY) */
+  title: string;
+  /** Start date/time as ISO 8601 string or Date */
+  start: string | Date;
+  /** End date/time as ISO 8601 string or Date */
+  end: string | Date;
+  /** Event description (DESCRIPTION) - optional */
+  description?: string;
+  /** Event location (LOCATION) - optional */
+  location?: string;
+  /** All-day event flag - when true, DTSTART/DTEND use DATE not DATE-TIME */
+  allDay?: boolean;
+  /** RRULE string for recurrence (e.g., "FREQ=WEEKLY;BYDAY=MO") - optional */
+  recurrence?: string;
+  /** Target calendar display name or path - optional, for routing to correct calendar */
+  calendar?: string;
+}
+
+/**
+ * Input parameters for updating an existing calendar event
+ *
+ * Used by updateICalString() to modify specific properties in existing iCalendar text.
+ * Only provided fields are modified - undefined fields are left unchanged.
+ */
+export interface UpdateEventInput {
+  /** New title (SUMMARY) - only modified if provided */
+  title?: string;
+  /** New start date/time - only modified if provided */
+  start?: string | Date;
+  /** New end date/time - only modified if provided */
+  end?: string | Date;
+  /** New description - only modified if provided */
+  description?: string;
+  /** New location - only modified if provided */
+  location?: string;
+  /** New recurrence rule - only modified if provided */
+  recurrence?: string;
+}
+
+/**
+ * Input parameters for creating a new contact
+ *
+ * Used by buildVCardString() to generate vCard from scratch.
+ */
+export interface CreateContactInput {
+  /** Full display name (FN property, also used to derive N property) */
+  name: string;
+  /** Email address (EMAIL property) - optional */
+  email?: string;
+  /** Phone number (TEL property) - optional */
+  phone?: string;
+  /** Organization (ORG property) - optional */
+  organization?: string;
+  /** Target addressbook display name or path - optional */
+  addressbook?: string;
+}
+
+/**
+ * Input parameters for updating an existing contact
+ *
+ * Used by updateVCardString() to modify specific properties in existing vCard text.
+ * Only provided fields are modified - undefined fields are left unchanged.
+ */
+export interface UpdateContactInput {
+  /** New display name - updates FN and N properties */
+  name?: string;
+  /** New email address - replaces first EMAIL or adds new */
+  email?: string;
+  /** New phone number - replaces first TEL or adds new */
+  phone?: string;
+  /** New organization - updates ORG property */
+  organization?: string;
+}
+
+// ============================================================================
+// Free/Busy DTOs (v2)
+// ============================================================================
+
+/**
+ * A single busy time period from a free/busy query
+ *
+ * Represents a FREEBUSY property in iCalendar format (RFC 5545).
+ */
+export interface FreeBusyPeriod {
+  /** Start of busy period */
+  start: Date;
+  /** End of busy period */
+  end: Date;
+  /** Free/busy type: BUSY, BUSY-TENTATIVE, BUSY-UNAVAILABLE */
+  type: string;
+}
+
+/**
+ * Aggregated result from a free/busy query
+ *
+ * Contains all busy periods within the requested time range.
+ */
+export interface FreeBusyResult {
+  /** Start of the queried time range */
+  queryStart: Date;
+  /** End of the queried time range */
+  queryEnd: Date;
+  /** List of busy periods within the range */
+  periods: FreeBusyPeriod[];
+}
