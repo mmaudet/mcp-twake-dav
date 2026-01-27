@@ -9,7 +9,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Logger } from 'pino';
 import type { AddressBookService } from '../../caldav/addressbook-service.js';
 import {
-  getAllContacts,
+  resolveAddressBookContacts,
   searchContactsByName,
   searchContactsByOrganization,
   formatContact,
@@ -25,14 +25,19 @@ import {
 export function registerSearchContactsTool(
   server: McpServer,
   addressBookService: AddressBookService,
-  logger: Logger
+  logger: Logger,
+  defaultAddressBook?: string,
 ): void {
   server.tool(
     'search_contacts',
-    'Search contacts by name across all address books. Supports optional organization filter. Case-insensitive partial matching on formatted name, given name, and family name.',
+    'Search contacts by name. Supports optional organization and address book filters. Case-insensitive partial matching on formatted name, given name, and family name.',
     {
       name: z.string().optional().describe('Name to search for (case-insensitive, partial match)'),
       organization: z.string().optional().describe('Organization to filter by (case-insensitive, partial match)'),
+      addressbook: z.string().optional().describe(
+        'Address book name to search in. Use "all" to search all address books. ' +
+        (defaultAddressBook ? `Defaults to "${defaultAddressBook}".` : 'Defaults to all address books.')
+      ),
     },
     async (params) => {
       try {
@@ -52,8 +57,10 @@ export function registerSearchContactsTool(
           };
         }
 
-        // Fetch all contacts from all address books
-        const contacts = await getAllContacts(addressBookService, logger);
+        // Fetch contacts based on addressbook param / default / all
+        const contacts = await resolveAddressBookContacts(
+          addressBookService, params.addressbook, defaultAddressBook, logger
+        );
 
         // Apply filters
         let filteredContacts = contacts;

@@ -27,6 +27,7 @@ export function createServer(
   addressBookService: AddressBookService,
   logger: Logger,
   defaultCalendar?: string,
+  defaultAddressBook?: string,
 ): McpServer {
   // Initialize MCP server
   const server = new McpServer({
@@ -35,7 +36,7 @@ export function createServer(
   });
 
   // Register all calendar and contact query tools
-  registerAllTools(server, calendarService, addressBookService, logger, defaultCalendar);
+  registerAllTools(server, calendarService, addressBookService, logger, defaultCalendar, defaultAddressBook);
   logger.info('Calendar and contact tools registered');
 
   return server;

@@ -9,7 +9,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Logger } from 'pino';
 import type { AddressBookService } from '../../caldav/addressbook-service.js';
 import {
-  getAllContacts,
+  resolveAddressBookContacts,
   formatContactSummary,
 } from './utils.js';
 
@@ -23,18 +23,26 @@ import {
 export function registerListContactsTool(
   server: McpServer,
   addressBookService: AddressBookService,
-  logger: Logger
+  logger: Logger,
+  defaultAddressBook?: string,
 ): void {
   server.tool(
     'list_contacts',
-    'List all contacts from all address books. Shows a summary of each contact (name, email, organization). Limited to 30 contacts.',
-    {},
-    async () => {
+    'List contacts from address books. Shows a summary of each contact (name, email, organization). Limited to 30 contacts. Optionally filter by address book name.',
+    {
+      addressbook: z.string().optional().describe(
+        'Address book name to list from. Use "all" to list from all address books. ' +
+        (defaultAddressBook ? `Defaults to "${defaultAddressBook}".` : 'Defaults to all address books.')
+      ),
+    },
+    async (params) => {
       try {
         logger.debug('list_contacts called');
 
-        // Fetch all contacts from all address books
-        const contacts = await getAllContacts(addressBookService, logger);
+        // Fetch contacts based on addressbook param / default / all
+        const contacts = await resolveAddressBookContacts(
+          addressBookService, params.addressbook, defaultAddressBook, logger
+        );
 
         if (contacts.length === 0) {
           logger.info('No contacts found');

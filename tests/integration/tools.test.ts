@@ -158,6 +158,33 @@ describe('MCP Tool Registration', () => {
     expect(tool!.inputSchema.properties!.calendar).toBeDefined();
   });
 
+  it('should register search_contacts with optional addressbook parameter', async () => {
+    const response = await client.listTools();
+
+    const tool = response.tools.find((t) => t.name === 'search_contacts');
+    expect(tool).toBeDefined();
+    expect(tool!.inputSchema.properties).toBeDefined();
+    expect(tool!.inputSchema.properties!.addressbook).toBeDefined();
+  });
+
+  it('should register get_contact_details with optional addressbook parameter', async () => {
+    const response = await client.listTools();
+
+    const tool = response.tools.find((t) => t.name === 'get_contact_details');
+    expect(tool).toBeDefined();
+    expect(tool!.inputSchema.properties).toBeDefined();
+    expect(tool!.inputSchema.properties!.addressbook).toBeDefined();
+  });
+
+  it('should register list_contacts with optional addressbook parameter', async () => {
+    const response = await client.listTools();
+
+    const tool = response.tools.find((t) => t.name === 'list_contacts');
+    expect(tool).toBeDefined();
+    expect(tool!.inputSchema.properties).toBeDefined();
+    expect(tool!.inputSchema.properties!.addressbook).toBeDefined();
+  });
+
   it('should register search_events with query or attendee parameter', async () => {
     const response = await client.listTools();
 

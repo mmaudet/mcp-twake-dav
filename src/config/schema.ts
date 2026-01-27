@@ -40,6 +40,7 @@ export const envSchema = z.object({
   DAV_TOKEN: z.string().optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   DAV_DEFAULT_CALENDAR: z.string().optional(),
+  DAV_DEFAULT_ADDRESSBOOK: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.DAV_AUTH_METHOD === 'basic') {
     if (!data.DAV_USERNAME) {

@@ -9,7 +9,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Logger } from 'pino';
 import type { AddressBookService } from '../../caldav/addressbook-service.js';
 import {
-  getAllContacts,
+  resolveAddressBookContacts,
   searchContactsByName,
   formatContact,
 } from './utils.js';
@@ -24,20 +24,27 @@ import {
 export function registerGetContactDetailsTool(
   server: McpServer,
   addressBookService: AddressBookService,
-  logger: Logger
+  logger: Logger,
+  defaultAddressBook?: string,
 ): void {
   server.tool(
     'get_contact_details',
-    'Get full details for a specific contact by name. Returns detailed contact information including all email addresses, phone numbers, and organization.',
+    'Get full details for a specific contact by name. Returns detailed contact information including all email addresses, phone numbers, and organization. Optionally filter by address book.',
     {
       name: z.string().describe('Contact name to look up (case-insensitive, partial match)'),
+      addressbook: z.string().optional().describe(
+        'Address book name to search in. Use "all" to search all address books. ' +
+        (defaultAddressBook ? `Defaults to "${defaultAddressBook}".` : 'Defaults to all address books.')
+      ),
     },
     async (params) => {
       try {
         logger.debug({ params }, 'get_contact_details called');
 
-        // Fetch all contacts from all address books
-        const contacts = await getAllContacts(addressBookService, logger);
+        // Fetch contacts based on addressbook param / default / all
+        const contacts = await resolveAddressBookContacts(
+          addressBookService, params.addressbook, defaultAddressBook, logger
+        );
 
         // Search by name
         const matchingContacts = searchContactsByName(contacts, params.name);

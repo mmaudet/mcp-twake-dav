@@ -34,6 +34,7 @@ export function registerAllTools(
   addressBookService: AddressBookService,
   logger: Logger,
   defaultCalendar?: string,
+  defaultAddressBook?: string,
 ): void {
   // Register calendar query tools (Phase 4)
   registerNextEventTool(server, calendarService, logger, defaultCalendar);
@@ -101,9 +102,9 @@ export function registerAllTools(
   );
 
   // Register contact query tools (Phase 5)
-  registerSearchContactsTool(server, addressBookService, logger);
-  registerGetContactDetailsTool(server, addressBookService, logger);
-  registerListContactsTool(server, addressBookService, logger);
+  registerSearchContactsTool(server, addressBookService, logger, defaultAddressBook);
+  registerGetContactDetailsTool(server, addressBookService, logger, defaultAddressBook);
+  registerListContactsTool(server, addressBookService, logger, defaultAddressBook);
 
   // Register list_addressbooks tool inline (CON-04)
   server.tool(
