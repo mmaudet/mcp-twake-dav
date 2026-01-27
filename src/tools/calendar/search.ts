@@ -14,6 +14,7 @@ import {
   parseNaturalDateRange,
   searchEventsByKeyword,
   searchEventsByAttendee,
+  resolveCalendarEvents,
 } from './utils.js';
 
 /**
@@ -26,15 +27,20 @@ import {
 export function registerSearchEventsTool(
   server: McpServer,
   calendarService: CalendarService,
-  logger: Logger
+  logger: Logger,
+  defaultCalendar?: string,
 ): void {
   server.tool(
     'search_events',
-    'Search calendar events by keyword in title/description or by attendee name. Searches the next 30 days by default.',
+    'Search calendar events by keyword in title/description or by attendee name. Searches the next 30 days by default. Optionally filter by calendar name.',
     {
       query: z.string().optional().describe('Keyword to search in event titles and descriptions'),
       attendee: z.string().optional().describe('Attendee name to filter by'),
       when: z.string().optional().describe('Date range to search (defaults to next 30 days). Examples: \'this week\', \'next month\''),
+      calendar: z.string().optional().describe(
+        'Calendar name to search in. Use "all" to search all calendars. ' +
+        (defaultCalendar ? `Defaults to "${defaultCalendar}".` : 'Defaults to all calendars.')
+      ),
     },
     async (params) => {
       try {
@@ -82,8 +88,10 @@ export function registerSearchEventsTool(
           };
         }
 
-        // Fetch all events from all calendars
-        const rawEvents = await calendarService.fetchAllEvents(timeRange);
+        // Fetch events based on calendar param / default / all
+        const rawEvents = await resolveCalendarEvents(
+          calendarService, params.calendar, defaultCalendar, timeRange
+        );
 
         // Transform and expand recurring events
         let events = getEventsWithRecurrenceExpansion(rawEvents, timeRange, logger);

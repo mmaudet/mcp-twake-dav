@@ -15,7 +15,7 @@ import * as chrono from 'chrono-node';
 import ICAL from 'ical.js';
 import type { Logger } from 'pino';
 import type { DAVCalendarObject } from 'tsdav';
-import type { TimeRange } from '../../caldav/calendar-service.js';
+import type { CalendarService, TimeRange } from '../../caldav/calendar-service.js';
 import type { EventDTO } from '../../types/dtos.js';
 import { transformCalendarObject } from '../../transformers/event.js';
 import { expandRecurringEvent } from '../../transformers/recurrence.js';
@@ -285,4 +285,32 @@ export function getEventsWithRecurrenceExpansion(
   }
 
   return limited;
+}
+
+/**
+ * Resolve which calendar(s) to query based on the calendar parameter and default setting
+ *
+ * Resolution order:
+ * 1. calendarParam provided and != "all" -> fetch from that specific calendar
+ * 2. calendarParam === "all" -> fetch from all calendars
+ * 3. calendarParam absent + defaultCalendar set -> fetch from default calendar
+ * 4. calendarParam absent + no default -> fetch from all calendars
+ *
+ * @param calendarService - Calendar service instance
+ * @param calendarParam - Optional calendar name from tool parameter
+ * @param defaultCalendar - Optional default calendar name from config
+ * @param timeRange - Time range for the query
+ * @returns Array of DAVCalendarObject from resolved calendar(s)
+ */
+export async function resolveCalendarEvents(
+  calendarService: CalendarService,
+  calendarParam: string | undefined,
+  defaultCalendar: string | undefined,
+  timeRange: TimeRange,
+): Promise<DAVCalendarObject[]> {
+  const target = calendarParam === 'all' ? undefined : (calendarParam || defaultCalendar);
+  if (target) {
+    return calendarService.fetchEventsByCalendarName(target, timeRange);
+  }
+  return calendarService.fetchAllEvents(timeRange);
 }

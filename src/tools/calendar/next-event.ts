@@ -11,6 +11,7 @@ import type { CalendarService } from '../../caldav/calendar-service.js';
 import {
   getEventsWithRecurrenceExpansion,
   formatEvent,
+  resolveCalendarEvents,
 } from './utils.js';
 
 /**
@@ -23,13 +24,17 @@ import {
 export function registerNextEventTool(
   server: McpServer,
   calendarService: CalendarService,
-  logger: Logger
+  logger: Logger,
+  defaultCalendar?: string,
 ): void {
   server.tool(
     'get_next_event',
-    'Get the next upcoming calendar event. Returns the soonest event from all calendars.',
+    'Get the next upcoming calendar event. Returns the soonest event. Optionally filter by calendar name, or use "all" to search all calendars.',
     {
-      calendar: z.string().optional().describe('Optional: filter by calendar name (not yet implemented)'),
+      calendar: z.string().optional().describe(
+        'Calendar name to search in. Use "all" to search all calendars. ' +
+        (defaultCalendar ? `Defaults to "${defaultCalendar}".` : 'Defaults to all calendars.')
+      ),
     },
     async (params) => {
       try {
@@ -45,8 +50,10 @@ export function registerNextEventTool(
           end: oneYearFromNow.toISOString(),
         };
 
-        // Fetch all events from all calendars
-        const rawEvents = await calendarService.fetchAllEvents(timeRange);
+        // Fetch events based on calendar param / default / all
+        const rawEvents = await resolveCalendarEvents(
+          calendarService, params.calendar, defaultCalendar, timeRange
+        );
 
         // Transform and expand recurring events
         const events = getEventsWithRecurrenceExpansion(rawEvents, timeRange, logger);

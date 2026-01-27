@@ -185,6 +185,28 @@ export class CalendarService {
   }
 
   /**
+   * Fetch events from a single calendar identified by display name (case-insensitive)
+   *
+   * Looks up the calendar by displayName among all discovered calendars.
+   * If no match is found, logs a warning and returns an empty array.
+   *
+   * @param name - Calendar display name to match (case-insensitive)
+   * @param timeRange - Optional ISO 8601 time range for server-side filtering
+   * @returns Array of DAVCalendarObject from the matched calendar, or empty if not found
+   */
+  async fetchEventsByCalendarName(name: string, timeRange?: TimeRange): Promise<DAVCalendarObject[]> {
+    await this.listCalendars();
+    const match = this.calendars.find(
+      (cal) => (String(cal.displayName || '')).toLowerCase() === name.toLowerCase()
+    );
+    if (!match) {
+      this.logger.warn({ calendarName: name }, 'Calendar not found, returning empty');
+      return [];
+    }
+    return this.fetchEvents(match, timeRange);
+  }
+
+  /**
    * Fetch events from ALL calendars (CAL-06 multi-calendar aggregation)
    *
    * Fetches events from all calendars in parallel, then flattens results.

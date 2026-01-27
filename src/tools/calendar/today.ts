@@ -13,6 +13,7 @@ import {
   formatEvent,
   getStartOfDay,
   getEndOfDay,
+  resolveCalendarEvents,
 } from './utils.js';
 
 /**
@@ -25,13 +26,19 @@ import {
 export function registerTodaysScheduleTool(
   server: McpServer,
   calendarService: CalendarService,
-  logger: Logger
+  logger: Logger,
+  defaultCalendar?: string,
 ): void {
   server.tool(
     'get_todays_schedule',
-    'Get all events scheduled for today, sorted by time.',
-    {},
-    async () => {
+    'Get all events scheduled for today, sorted by time. Optionally filter by calendar name, or use "all" to search all calendars.',
+    {
+      calendar: z.string().optional().describe(
+        'Calendar name to search in. Use "all" to search all calendars. ' +
+        (defaultCalendar ? `Defaults to "${defaultCalendar}".` : 'Defaults to all calendars.')
+      ),
+    },
+    async (params) => {
       try {
         logger.debug('get_todays_schedule called');
 
@@ -45,8 +52,10 @@ export function registerTodaysScheduleTool(
           end: endOfDay.toISOString(),
         };
 
-        // Fetch all events from all calendars
-        const rawEvents = await calendarService.fetchAllEvents(timeRange);
+        // Fetch events based on calendar param / default / all
+        const rawEvents = await resolveCalendarEvents(
+          calendarService, params.calendar, defaultCalendar, timeRange
+        );
 
         // Transform and expand recurring events
         const events = getEventsWithRecurrenceExpansion(rawEvents, timeRange, logger);

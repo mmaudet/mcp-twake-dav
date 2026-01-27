@@ -12,6 +12,7 @@ import {
   getEventsWithRecurrenceExpansion,
   formatEvent,
   parseNaturalDateRange,
+  resolveCalendarEvents,
 } from './utils.js';
 
 /**
@@ -24,13 +25,18 @@ import {
 export function registerDateRangeTool(
   server: McpServer,
   calendarService: CalendarService,
-  logger: Logger
+  logger: Logger,
+  defaultCalendar?: string,
 ): void {
   server.tool(
     'get_events_in_range',
-    'Get calendar events for a date range. Accepts natural language like \'this week\', \'next month\', \'tomorrow\', or specific dates like \'2026-02-01 to 2026-02-07\'.',
+    'Get calendar events for a date range. Accepts natural language like \'this week\', \'next month\', \'tomorrow\', or specific dates like \'2026-02-01 to 2026-02-07\'. Optionally filter by calendar name.',
     {
       when: z.string().describe('Date range expression: \'this week\', \'next month\', \'tomorrow\', \'January 15 to January 20\', etc.'),
+      calendar: z.string().optional().describe(
+        'Calendar name to search in. Use "all" to search all calendars. ' +
+        (defaultCalendar ? `Defaults to "${defaultCalendar}".` : 'Defaults to all calendars.')
+      ),
     },
     async (params) => {
       try {
@@ -52,8 +58,10 @@ export function registerDateRangeTool(
           };
         }
 
-        // Fetch all events from all calendars
-        const rawEvents = await calendarService.fetchAllEvents(timeRange);
+        // Fetch events based on calendar param / default / all
+        const rawEvents = await resolveCalendarEvents(
+          calendarService, params.calendar, defaultCalendar, timeRange
+        );
 
         // Transform and expand recurring events
         const events = getEventsWithRecurrenceExpansion(rawEvents, timeRange, logger);

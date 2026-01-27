@@ -25,7 +25,8 @@ import { registerAllTools } from './tools/index.js';
 export function createServer(
   calendarService: CalendarService,
   addressBookService: AddressBookService,
-  logger: Logger
+  logger: Logger,
+  defaultCalendar?: string,
 ): McpServer {
   // Initialize MCP server
   const server = new McpServer({
@@ -34,7 +35,7 @@ export function createServer(
   });
 
   // Register all calendar and contact query tools
-  registerAllTools(server, calendarService, addressBookService, logger);
+  registerAllTools(server, calendarService, addressBookService, logger, defaultCalendar);
   logger.info('Calendar and contact tools registered');
 
   return server;

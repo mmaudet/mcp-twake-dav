@@ -32,13 +32,14 @@ export function registerAllTools(
   server: McpServer,
   calendarService: CalendarService,
   addressBookService: AddressBookService,
-  logger: Logger
+  logger: Logger,
+  defaultCalendar?: string,
 ): void {
   // Register calendar query tools (Phase 4)
-  registerNextEventTool(server, calendarService, logger);
-  registerTodaysScheduleTool(server, calendarService, logger);
-  registerDateRangeTool(server, calendarService, logger);
-  registerSearchEventsTool(server, calendarService, logger);
+  registerNextEventTool(server, calendarService, logger, defaultCalendar);
+  registerTodaysScheduleTool(server, calendarService, logger, defaultCalendar);
+  registerDateRangeTool(server, calendarService, logger, defaultCalendar);
+  registerSearchEventsTool(server, calendarService, logger, defaultCalendar);
 
   // Register list_calendars tool inline (CAL-05)
   server.tool(
