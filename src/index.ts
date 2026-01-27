@@ -20,6 +20,7 @@ import { createDualClients, validateDualConnection } from './caldav/client.js';
 import { CalendarService } from './caldav/calendar-service.js';
 import { AddressBookService } from './caldav/addressbook-service.js';
 import { formatStartupError } from './errors.js';
+import { registerAllTools } from './tools/index.js';
 
 /**
  * Main entry point with full startup validation
@@ -54,7 +55,11 @@ async function main() {
       version: '0.1.0',
     });
 
-    // TODO (Phase 4/5): Register MCP tools using calendarService and addressBookService
+    // Register calendar query tools (Phase 4: CAL-01 through CAL-08)
+    registerAllTools(server, calendarService, logger);
+    logger.info('Calendar tools registered');
+
+    // TODO (Phase 5): Register contact query tools using addressBookService
     logger.info('MCP server initialized');
 
     // Step 7: Connect stdio transport
