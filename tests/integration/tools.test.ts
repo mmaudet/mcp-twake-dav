@@ -77,11 +77,11 @@ describe('MCP Tool Registration', () => {
     await serverTransport.close();
   });
 
-  it('should register all 12 tools', async () => {
+  it('should register all 15 tools', async () => {
     const response = await client.listTools();
 
     expect(response.tools).toBeDefined();
-    expect(response.tools).toHaveLength(12);
+    expect(response.tools).toHaveLength(15);
   });
 
   it('should register tools with correct names', async () => {
@@ -89,7 +89,9 @@ describe('MCP Tool Registration', () => {
 
     const toolNames = response.tools.map((tool) => tool.name).sort();
     const expectedNames = [
+      'create_contact',
       'create_event',
+      'delete_contact',
       'delete_event',
       'get_contact_details',
       'get_events_in_range',
@@ -100,6 +102,7 @@ describe('MCP Tool Registration', () => {
       'list_contacts',
       'search_contacts',
       'search_events',
+      'update_contact',
       'update_event',
     ];
 
@@ -278,9 +281,56 @@ describe('MCP Tool Registration', () => {
     expect('calendar' in properties).toBe(true);
   });
 
+  it('should register create_contact with required name and optional fields', async () => {
+    const response = await client.listTools();
+    const tool = response.tools.find((t) => t.name === 'create_contact');
+    expect(tool).toBeDefined();
+    expect(tool!.inputSchema).toBeDefined();
+    expect(tool!.inputSchema.properties).toBeDefined();
+    const properties = tool!.inputSchema.properties!;
+    expect('name' in properties).toBe(true);
+    expect(tool!.inputSchema.required).toBeDefined();
+    expect(tool!.inputSchema.required).toContain('name');
+    // Optional fields
+    expect('email' in properties).toBe(true);
+    expect('phone' in properties).toBe(true);
+    expect('organization' in properties).toBe(true);
+    expect('addressbook' in properties).toBe(true);
+  });
+
+  it('should register update_contact with required uid and optional fields', async () => {
+    const response = await client.listTools();
+    const tool = response.tools.find((t) => t.name === 'update_contact');
+    expect(tool).toBeDefined();
+    expect(tool!.inputSchema).toBeDefined();
+    expect(tool!.inputSchema.properties).toBeDefined();
+    const properties = tool!.inputSchema.properties!;
+    expect('uid' in properties).toBe(true);
+    expect(tool!.inputSchema.required).toBeDefined();
+    expect(tool!.inputSchema.required).toContain('uid');
+    // Optional fields
+    expect('name' in properties).toBe(true);
+    expect('email' in properties).toBe(true);
+    expect('phone' in properties).toBe(true);
+    expect('organization' in properties).toBe(true);
+  });
+
+  it('should register delete_contact with required uid and optional addressbook', async () => {
+    const response = await client.listTools();
+    const tool = response.tools.find((t) => t.name === 'delete_contact');
+    expect(tool).toBeDefined();
+    expect(tool!.inputSchema).toBeDefined();
+    expect(tool!.inputSchema.properties).toBeDefined();
+    const properties = tool!.inputSchema.properties!;
+    expect('uid' in properties).toBe(true);
+    expect(tool!.inputSchema.required).toBeDefined();
+    expect(tool!.inputSchema.required).toContain('uid');
+    expect('addressbook' in properties).toBe(true);
+  });
+
   it('should include confirmation instruction in all write tool descriptions', async () => {
     const response = await client.listTools();
-    const writeToolNames = ['create_event', 'update_event', 'delete_event'];
+    const writeToolNames = ['create_event', 'update_event', 'delete_event', 'create_contact', 'update_contact', 'delete_contact'];
 
     for (const name of writeToolNames) {
       const tool = response.tools.find((t) => t.name === name);

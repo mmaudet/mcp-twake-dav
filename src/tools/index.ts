@@ -2,7 +2,7 @@
  * MCP tool registration aggregator
  *
  * Registers all calendar query tools (Phase 4), contact query tools (Phase 5),
- * and calendar write tools (Phase 9).
+ * calendar write tools (Phase 9), and contact write tools (Phase 10).
  */
 
 import { z } from 'zod';
@@ -20,6 +20,9 @@ import { registerUpdateEventTool } from './calendar/update-event.js';
 import { registerSearchContactsTool } from './contacts/search.js';
 import { registerGetContactDetailsTool } from './contacts/details.js';
 import { registerListContactsTool } from './contacts/list.js';
+import { registerDeleteContactTool } from './contacts/delete-contact.js';
+import { registerCreateContactTool } from './contacts/create-contact.js';
+import { registerUpdateContactTool } from './contacts/update-contact.js';
 
 /**
  * Register all MCP tools
@@ -27,6 +30,7 @@ import { registerListContactsTool } from './contacts/list.js';
  * Phase 4: Registers calendar query tools (CAL-01 through CAL-08)
  * Phase 5: Registers contact query tools (CON-01 through CON-04)
  * Phase 9: Registers calendar write tools (CALW-01 through CALW-03)
+ * Phase 10: Registers contact write tools (CONW-01 through CONW-03)
  *
  * @param server - MCP server instance
  * @param calendarService - Calendar service for calendar tools
@@ -115,6 +119,11 @@ export function registerAllTools(
   registerSearchContactsTool(server, addressBookService, logger, defaultAddressBook);
   registerGetContactDetailsTool(server, addressBookService, logger, defaultAddressBook);
   registerListContactsTool(server, addressBookService, logger, defaultAddressBook);
+
+  // Register contact write tools (Phase 10)
+  registerDeleteContactTool(server, addressBookService, logger, defaultAddressBook);
+  registerCreateContactTool(server, addressBookService, logger, defaultAddressBook);
+  registerUpdateContactTool(server, addressBookService, logger, defaultAddressBook);
 
   // Register list_addressbooks tool inline (CON-04)
   server.tool(
