@@ -392,7 +392,11 @@ Plans:
 6. All three tool descriptions include "IMPORTANT: Confirm with the user before proceeding"
 7. Round-trip verified: create -> read -> update -> read -> delete -> verify gone
 
-**Plans:** TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 10-01-PLAN.md -- delete_contact + create_contact tool modules (new files only)
+- [ ] 10-02-PLAN.md -- update_contact tool + wire all 3 into registry + update integration tests
 
 **Notes:**
 - New files: `src/tools/contacts/delete-contact.ts`, `src/tools/contacts/create-contact.ts`, `src/tools/contacts/update-contact.ts`
@@ -479,4 +483,4 @@ Plans:
 
 ---
 
-*Last updated: 2026-01-27 after Phase 9 execution and verification*
+*Last updated: 2026-01-27 after Phase 10 planning*
