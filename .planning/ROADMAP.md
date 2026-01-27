@@ -395,8 +395,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 10-01-PLAN.md -- delete_contact + create_contact tool modules (new files only)
-- [ ] 10-02-PLAN.md -- update_contact tool + wire all 3 into registry + update integration tests
+- [x] 10-01-PLAN.md -- delete_contact + create_contact tool modules (new files only)
+- [x] 10-02-PLAN.md -- update_contact tool + wire all 3 into registry + update integration tests
 
 **Notes:**
 - New files: `src/tools/contacts/delete-contact.ts`, `src/tools/contacts/create-contact.ts`, `src/tools/contacts/update-contact.ts`
@@ -406,7 +406,7 @@ Plans:
 - Preserves existing vCard version (3.0 or 4.0) during updates
 - Pitfalls addressed: FN/UID validation (P7), UID uniqueness (P8)
 
-**Status:** Not Started
+**Status:** Complete (2026-01-27)
 
 ---
 
@@ -460,12 +460,12 @@ Plans:
 | 7 - Write Infrastructure & Reverse Transformers | v2 | WINF-01 (partial), WINF-03 | Complete | 100% |
 | 8 - Service Layer Write Methods | v2 | WINF-01 (complete), WINF-02 | Complete | 100% |
 | 9 - Calendar Write Tools | v2 | CALW-01, CALW-02, CALW-03, WINF-05 (cal) | Complete | 100% |
-| 10 - Contact Write Tools | v2 | CONW-01, CONW-02, CONW-03, WINF-05 (con) | Not Started | 0% |
+| 10 - Contact Write Tools | v2 | CONW-01, CONW-02, CONW-03, WINF-05 (con) | Complete | 100% |
 | 11 - Free/Busy & MCP Annotations | v2 | ADV-01, WINF-04 | Not Started | 0% |
 
 **v1:** 18/18 requirements complete (100%)
-**v2:** 7/12 requirements complete (58%)
-**Overall:** 25/30 requirements complete (83%)
+**v2:** 10/12 requirements complete (83%)
+**Overall:** 28/30 requirements complete (93%)
 
 ## Milestone Status
 
@@ -476,11 +476,11 @@ Plans:
 - Audit: PASS
 
 **v2 Milestone: IN PROGRESS**
-- 7/12 requirements delivered
+- 10/12 requirements delivered
 - 5 phases planned (7-11)
 - 7 new MCP tools to build (16 total)
 - Zero new dependencies required
 
 ---
 
-*Last updated: 2026-01-27 after Phase 10 planning*
+*Last updated: 2026-01-27 after Phase 10 execution and verification*

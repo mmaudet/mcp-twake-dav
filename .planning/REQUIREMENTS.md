@@ -73,14 +73,14 @@
 
 ### Contact Write
 
-- [ ] **CONW-01**: User can create a new contact via `create_contact` tool
+- [x] **CONW-01**: User can create a new contact via `create_contact` tool
   - Parameters: name (required), email, phone, organization, addressbook
   - Generates valid vCard 3.0 with VERSION, FN, N, UID (crypto.randomUUID)
   - Uses `If-None-Match: *` to prevent overwriting existing resource
   - Invalidates collection cache after successful creation
   - Tool description instructs AI to confirm with user before creating
 
-- [ ] **CONW-02**: User can update an existing contact via `update_contact` tool
+- [x] **CONW-02**: User can update an existing contact via `update_contact` tool
   - Parameters: uid (required), plus any changeable field (name, email, phone, organization)
   - Finds contact by UID across all address books (or specified addressbook)
   - Parse-modify-serialize pattern on `_raw` vCard (preserves photos, groups, custom fields)
@@ -90,7 +90,7 @@
   - Invalidates collection cache after successful update
   - Tool description instructs AI to confirm changes with user
 
-- [ ] **CONW-03**: User can delete a contact via `delete_contact` tool
+- [x] **CONW-03**: User can delete a contact via `delete_contact` tool
   - Parameters: uid (required), addressbook (optional)
   - Finds contact by UID across all address books (or specified addressbook)
   - Uses `If-Match: <etag>` for conflict detection; fetches fresh ETag if missing
@@ -131,7 +131,7 @@
   - Read tools: `readOnlyHint: true`
   - All tools: `openWorldHint: true` (CalDAV data may change externally)
 
-- [ ] **WINF-05**: Tool descriptions guide AI to confirm with user before mutations
+- [x] **WINF-05**: Tool descriptions guide AI to confirm with user before mutations
   - All write tool descriptions include "IMPORTANT: Confirm with the user before proceeding"
   - No code-level confirmation enforcement (tools remain composable)
 
@@ -184,21 +184,21 @@
 | CALW-01 | Phase 9 | Complete |
 | CALW-02 | Phase 9 | Complete |
 | CALW-03 | Phase 9 | Complete |
-| CONW-01 | Phase 10 | Pending |
-| CONW-02 | Phase 10 | Pending |
-| CONW-03 | Phase 10 | Pending |
+| CONW-01 | Phase 10 | Complete |
+| CONW-02 | Phase 10 | Complete |
+| CONW-03 | Phase 10 | Complete |
 | ADV-01 | Phase 11 | Pending |
 | WINF-01 | Phase 7-8 | Complete |
 | WINF-02 | Phase 8 | Complete |
 | WINF-03 | Phase 7 | Complete |
 | WINF-04 | Phase 11 | Pending |
-| WINF-05 | Phase 9-10 | Partial (calendar done) |
+| WINF-05 | Phase 9-10 | Complete |
 
 **Coverage:**
 - v1 requirements: 18 total -- 18 complete
-- v2 requirements: 12 total -- 7 complete (CALW-01/02/03, WINF-01/02/03, WINF-05 partial)
-- Total: 30 requirements (25 complete)
+- v2 requirements: 12 total -- 10 complete
+- Total: 30 requirements (28 complete)
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 -- CALW-01, CALW-02, CALW-03 marked complete after Phase 9*
+*Last updated: 2026-01-27 -- CONW-01, CONW-02, CONW-03, WINF-05 marked complete after Phase 10*
