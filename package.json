@@ -8,12 +8,16 @@
   "bin": {
     "mcp-twake": "build/index.js"
   },
+  "files": [
+    "build/"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
     "dev": "tsc --watch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
   },
   "engines": {
     "node": ">=18.0.0"
