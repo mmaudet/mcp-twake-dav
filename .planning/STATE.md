@@ -12,17 +12,17 @@
 
 ## Current Position
 
-**Phase:** 5 of 6 - Contact Query Services
+**Phase:** 6 of 6 - MCP Integration & Testing
 
-**Plan:** 2 of 2 (Complete)
+**Plan:** 1 of 3 (In progress)
 
-**Status:** Planned, ready for execution
+**Status:** In progress
 
-**Last activity:** 2026-01-27 - Phase 6 planned (3 plans, 2 waves)
+**Last activity:** 2026-01-27 - Completed 06-01-PLAN.md
 
 **Progress:**
 ```
-[███████████████████░] 100% (18/18 requirements)
+[████████████████████] 100% (18/18 requirements)
 ```
 
 **Milestone:** v1 - Read-only CalDAV/CardDAV MCP Server
@@ -40,11 +40,11 @@
 - Phase 6: 0/0 requirements (validation)
 
 **Recent Completions:**
+- 2026-01-27: 06-01 - MCP Integration Testing Setup (3 minutes, 2 tasks)
 - 2026-01-27: 05-02 - Contact MCP Tools + Entry Point Wiring (1 minute, 2 tasks) ✓ PHASE 5 COMPLETE
 - 2026-01-27: 05-01 - Contact Query Services Utilities (2 minutes, 2 tasks)
 - 2026-01-27: 04-02 - Calendar MCP Tools (2.1 minutes, 2 tasks) ✓ PHASE 4 COMPLETE
 - 2026-01-27: 04-01 - Shared Calendar Query Utilities (~2 minutes, 2 tasks)
-- 2026-01-27: 03-05 - Startup Wiring (2 minutes, 2 tasks) ✓ PHASE 3 COMPLETE
 
 ## Accumulated Context
 
@@ -99,6 +99,10 @@
 | list_addressbooks tool inline | Follows Phase 4's list_calendars pattern (simple tool, no file proliferation) | 5 | 2026-01-27 |
 | 30-contact truncation limit for list_contacts | Prevents output overflow, matches Phase 4's 50-event limit philosophy | 5 | 2026-01-27 |
 | Intersection filter logic for dual search | When both name and organization provided, contacts must match both (narrowing search) | 5 | 2026-01-27 |
+| Factory pattern for server creation | Separates McpServer creation from transport connection; enables stdio and in-memory testing | 6 | 2026-01-27 |
+| InMemoryTransport for integration tests | MCP SDK's linked transport pair enables in-process testing without CalDAV dependency | 6 | 2026-01-27 |
+| Minimal mock services for testing | Empty method stubs satisfy service interfaces for tool registration tests | 6 | 2026-01-27 |
+| Vitest for integration testing | Fast, ESM-native test runner with TypeScript support; 7 tests validating MCP protocol contracts | 6 | 2026-01-27 |
 
 ### Active TODOs
 
@@ -173,16 +177,25 @@ None currently.
 - 4 MCP tools: search_contacts, get_contact_details, list_contacts, list_addressbooks
 - Full report: .planning/phases/05-contact-query-services/05-VERIFICATION.md
 
+**Phase 6 Plan 01 Execution (2026-01-27):**
+- Tasks: 2/2 complete (createServer extraction, Vitest integration tests)
+- Duration: 3 minutes 2 seconds
+- Tests: 7/7 passing (2 server creation, 5 MCP protocol contracts)
+- All 9 MCP tools validated via InMemoryTransport
+- TypeScript compiles cleanly, entry point behavior unchanged
+- SUMMARY: .planning/phases/06-mcp-integration-testing/06-01-SUMMARY.md
+
 ## Session Continuity
 
-**Last Session:** 2026-01-27 - Phase 6 planned
+**Last Session:** 2026-01-27 - Completed 06-01-PLAN.md
 
-**Stopped at:** Phase 6 planned, ready for execution
+**Stopped at:** Completed 06-01-PLAN.md (MCP Integration Testing Setup)
 
 **Resume file:** None
 
 **Next Session Should:**
-1. Execute Phase 6 (MCP Integration & Testing) — FINAL PHASE
+1. Execute Phase 6 Plan 02 (Manual Testing with real CalDAV server)
+2. Execute Phase 6 Plan 03 (End-to-End Testing)
 
 **Context for Next Developer:**
 - This is a TypeScript MCP server for CalDAV/CardDAV (read-only v1)
@@ -192,15 +205,17 @@ None currently.
 - ✓ Phase 3 COMPLETE: Dual tsdav clients, discovery, calendar/addressbook services, cache, retry, startup wiring
 - ✓ Phase 4 COMPLETE: 5 MCP calendar tools (get_next_event, get_todays_schedule, get_events_in_range, search_events, list_calendars), tool registration aggregator, wired into src/index.ts
 - ✓ Phase 5 COMPLETE: 4 MCP contact tools (search_contacts, get_contact_details, list_contacts, list_addressbooks), dual-filter search, LLM-optimized formatting
+- ✓ Phase 6 Plan 01 COMPLETE: createServer() factory extracted, Vitest integration tests (7 passing), InMemoryTransport testing infrastructure
 - Server creates dual CalDAV/CardDAV clients at startup
 - CalendarService and AddressBookService initialized and available
 - CTag-based caching and retry infrastructure operational
 - MCP tools registered before server.connect() for discoverability
 - Tool pattern established: Zod schemas, try/catch, formatEvent/formatContact utilities
 - 9 total MCP tools operational: 5 calendar + 4 contact
+- Test infrastructure: InMemoryTransport for protocol tests, mock services for unit testing
 
 **Open Questions:**
-- Will tsdav work with SabreDAV? (to be tested during Phase 6 integration testing)
+- Will tsdav work with SabreDAV? (to be tested in Phase 6 Plan 02 manual testing)
 
 ---
 
