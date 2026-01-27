@@ -39,7 +39,7 @@
 
 ### Calendar Write
 
-- [ ] **CALW-01**: User can create a new calendar event via `create_event` tool
+- [x] **CALW-01**: User can create a new calendar event via `create_event` tool
   - Parameters: title (required), start (required), end (required), description, location, calendar, allDay, recurrence
   - Natural language date support via chrono-node (e.g., "tomorrow at 2pm")
   - All-day events supported via `allDay` boolean (DATE vs DATE-TIME format)
@@ -50,7 +50,7 @@
   - Invalidates collection cache after successful creation
   - Tool description instructs AI to confirm with user before creating
 
-- [ ] **CALW-02**: User can update an existing calendar event via `update_event` tool
+- [x] **CALW-02**: User can update an existing calendar event via `update_event` tool
   - Parameters: uid (required), plus any changeable field (title, start, end, description, location)
   - Finds event by UID across all calendars (or specified calendar)
   - Parse-modify-serialize pattern on `_raw` iCalendar (preserves VALARM, X-properties, ATTENDEE params)
@@ -62,7 +62,7 @@
   - Invalidates collection cache after successful update
   - Tool description instructs AI to confirm changes with user
 
-- [ ] **CALW-03**: User can delete a calendar event via `delete_event` tool
+- [x] **CALW-03**: User can delete a calendar event via `delete_event` tool
   - Parameters: uid (required), calendar (optional)
   - Finds event by UID across all calendars (or specified calendar)
   - Uses `If-Match: <etag>` for conflict detection; fetches fresh ETag if missing
@@ -181,9 +181,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CALW-01 | Phase 9 | Pending |
-| CALW-02 | Phase 9 | Pending |
-| CALW-03 | Phase 9 | Pending |
+| CALW-01 | Phase 9 | Complete |
+| CALW-02 | Phase 9 | Complete |
+| CALW-03 | Phase 9 | Complete |
 | CONW-01 | Phase 10 | Pending |
 | CONW-02 | Phase 10 | Pending |
 | CONW-03 | Phase 10 | Pending |
@@ -192,13 +192,13 @@
 | WINF-02 | Phase 8 | Complete |
 | WINF-03 | Phase 7 | Complete |
 | WINF-04 | Phase 11 | Pending |
-| WINF-05 | Phase 9-10 | Pending |
+| WINF-05 | Phase 9-10 | Partial (calendar done) |
 
 **Coverage:**
 - v1 requirements: 18 total -- 18 complete
-- v2 requirements: 12 total -- 3 complete
-- Total: 30 requirements (21 complete)
+- v2 requirements: 12 total -- 7 complete (CALW-01/02/03, WINF-01/02/03, WINF-05 partial)
+- Total: 30 requirements (25 complete)
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 -- WINF-01, WINF-02 marked complete after Phase 8*
+*Last updated: 2026-01-27 -- CALW-01, CALW-02, CALW-03 marked complete after Phase 9*

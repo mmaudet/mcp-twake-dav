@@ -355,8 +355,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md -- delete_event + create_event tool modules (new files only)
-- [ ] 09-02-PLAN.md -- update_event tool + wire all 3 into registry + update integration tests
+- [x] 09-01-PLAN.md -- delete_event + create_event tool modules (new files only)
+- [x] 09-02-PLAN.md -- update_event tool + wire all 3 into registry + update integration tests
 
 **Notes:**
 - New files: `src/tools/calendar/delete-event.ts`, `src/tools/calendar/create-event.ts`, `src/tools/calendar/update-event.ts`
@@ -367,7 +367,7 @@ Plans:
 - Safety check on update: verify RRULE preserved after modification of recurring events
 - Pitfalls addressed: scheduling side-effects (P4), URL construction (P9), recurring series destruction (P10)
 
-**Status:** Not Started
+**Status:** Complete (2026-01-27)
 
 ---
 
@@ -455,13 +455,13 @@ Plans:
 | 6 - MCP Integration & Testing | v1 | (validation) | Complete | 100% |
 | 7 - Write Infrastructure & Reverse Transformers | v2 | WINF-01 (partial), WINF-03 | Complete | 100% |
 | 8 - Service Layer Write Methods | v2 | WINF-01 (complete), WINF-02 | Complete | 100% |
-| 9 - Calendar Write Tools | v2 | CALW-01, CALW-02, CALW-03, WINF-05 (cal) | Not Started | 0% |
+| 9 - Calendar Write Tools | v2 | CALW-01, CALW-02, CALW-03, WINF-05 (cal) | Complete | 100% |
 | 10 - Contact Write Tools | v2 | CONW-01, CONW-02, CONW-03, WINF-05 (con) | Not Started | 0% |
 | 11 - Free/Busy & MCP Annotations | v2 | ADV-01, WINF-04 | Not Started | 0% |
 
 **v1:** 18/18 requirements complete (100%)
-**v2:** 3/12 requirements complete (25%)
-**Overall:** 21/30 requirements complete (70%)
+**v2:** 7/12 requirements complete (58%)
+**Overall:** 25/30 requirements complete (83%)
 
 ## Milestone Status
 
@@ -472,11 +472,11 @@ Plans:
 - Audit: PASS
 
 **v2 Milestone: IN PROGRESS**
-- 0/12 requirements delivered
+- 7/12 requirements delivered
 - 5 phases planned (7-11)
 - 7 new MCP tools to build (16 total)
 - Zero new dependencies required
 
 ---
 
-*Last updated: 2026-01-27 after Phase 9 planning*
+*Last updated: 2026-01-27 after Phase 9 execution and verification*
