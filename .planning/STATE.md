@@ -2,32 +2,32 @@
 
 **Last Updated:** 2026-01-27
 **Current Phase:** Phase 11 - Free/Busy & Annotations
-**Current Plan:** 1 of 2
+**Current Plan:** 2 of 2
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-27)
 
 **Core Value:** Users can ask an AI assistant questions about their CalDAV calendars and CardDAV contacts and get accurate answers from their own sovereign infrastructure.
-**Current Focus:** Milestone v2 -- Write Operations & Free/Busy
+**Current Focus:** Milestone v2 -- Write Operations & Free/Busy -- COMPLETE
 
 ## Current Position
 
 Phase: 11 of 11 (Free/Busy & Annotations)
-Plan: 1 of 2
-Status: In progress
-Last activity: 2026-01-27 -- Completed 11-01-PLAN.md
+Plan: 2 of 2
+Status: Phase complete -- v2 milestone complete
+Last activity: 2026-01-27 -- Completed 11-02-PLAN.md
 
-Milestone: v2 - Write Operations & Free/Busy
+Milestone: v2 - Write Operations & Free/Busy -- COMPLETE
 
-Progress: [|||||||||||||██████████] 96% (v1 complete + 11 v2 plans)
+Progress: [████████████████████████] 100% (v1 complete + 12 v2 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 27 (16 v1 + 11 v2)
-- v2 plans completed: 11
-- Total execution time: 26.0 min (v2 only; v1 metrics not tracked)
+- Total plans completed: 28 (16 v1 + 12 v2)
+- v2 plans completed: 12
+- Total execution time: 31.0 min (v2 only; v1 metrics not tracked)
 
 **By Phase:**
 
@@ -43,7 +43,7 @@ Progress: [|||||||||||||██████████] 96% (v1 complete + 11 v2
 | 8 - Service Layer Write Methods | 2 of 2 | Complete (v2) |
 | 9 - Calendar Write Tools | 2 of 2 | Complete (v2) |
 | 10 - Contact Write Tools | 2 of 2 | Complete (v2) |
-| 11 - Free/Busy & Annotations | 1 of 2 | In progress (v2) |
+| 11 - Free/Busy & Annotations | 2 of 2 | Complete (v2) |
 
 ## Accumulated Context
 
@@ -77,18 +77,20 @@ Recent decisions affecting current work:
 - Contact tools have NO chrono-node (no date fields) and NO attendee warnings (Phase 10 Plan 1)
 - update_contact validates at least one updatable field (name/email/phone/organization) (Phase 10 Plan 2)
 - update_contact has NO RRULE safety check or attendee warnings (contacts don't have either) (Phase 10 Plan 2)
-- Integration tests validate all 15 tools including 6 write tools with IMPORTANT confirmation (Phase 10 Plan 2)
+- Integration tests validate all 16 tools including 6 write tools with IMPORTANT confirmation (Phase 11 Plan 2)
 - freeBusyQuery uses standalone tsdav import with manual auth headers from CalendarService.getAuthHeaders() (Phase 11 Plan 1)
 - Server-side REPORT returns early on success; client-side fallback always works independently (Phase 11 Plan 1)
 - TRANSPARENT events filtered via ICAL.parse of _raw field, not DTO property (Phase 11 Plan 1)
+- MCP SDK server.tool() takes annotations as flat 4th param before handler, not wrapped in {annotations:{...}} (Phase 11 Plan 2)
+- Annotations are flat ToolAnnotations objects at SDK level; wire format includes annotations wrapper (Phase 11 Plan 2)
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-None currently.
+None. All milestones complete.
 
 ### Research Flags
 
@@ -97,12 +99,12 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-01-27 -- Phase 11 Plan 1 executed
-Stopped at: Completed 11-01-PLAN.md (check_availability tool module + auth headers + busy period utilities)
+Last session: 2026-01-27 -- Phase 11 Plan 2 executed
+Stopped at: Completed 11-02-PLAN.md (all 16 tools annotated, check_availability registered, tests updated)
 Resume file: None
 
-Next: Execute Phase 11 Plan 2 (tool registration with annotations)
+All phases complete. v2 milestone delivered.
 
 ---
-*State updated: 2026-01-27 after Phase 11 Plan 1 execution*
-*Phase 11 Plan 1 Complete - check_availability tool module ready for registration*
+*State updated: 2026-01-27 after Phase 11 Plan 2 execution*
+*Phase 11 Complete -- v2 milestone complete -- 16 tools with MCP annotations*
