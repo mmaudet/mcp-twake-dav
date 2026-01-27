@@ -1,8 +1,8 @@
 # State: mcp-twake
 
 **Last Updated:** 2026-01-27
-**Current Phase:** Not started
-**Current Plan:** None
+**Current Phase:** 1 of 6 - Foundation & Configuration
+**Current Plan:** 1 of 4 (just completed 01-01)
 
 ## Project Reference
 
@@ -14,13 +14,15 @@
 
 **Phase:** 1 of 6 - Foundation & Configuration
 
-**Plan:** None (awaiting `/gsd:plan-phase 1`)
+**Plan:** 1 of 4
 
-**Status:** Not started
+**Status:** In progress
+
+**Last activity:** 2026-01-27 - Completed 01-01-PLAN.md
 
 **Progress:**
 ```
-[░░░░░░░░░░░░░░░░░░░░] 0% (0/18 requirements)
+[█░░░░░░░░░░░░░░░░░░░] 6% (1/18 requirements)
 ```
 
 **Milestone:** v1 - Read-only CalDAV/CardDAV MCP Server
@@ -30,14 +32,15 @@
 **Velocity:** N/A (no completed plans yet)
 
 **Phase Stats:**
-- Phase 1: 0/4 requirements
+- Phase 1: 1/4 requirements (01-01 complete)
 - Phase 2: 0/1 requirements
 - Phase 3: 0/3 requirements
 - Phase 4: 0/6 requirements
 - Phase 5: 0/4 requirements
 - Phase 6: 0/0 requirements (validation)
 
-**Recent Completions:** None yet
+**Recent Completions:**
+- 2026-01-27: 01-01 - Foundation Configuration (2 minutes, 2 tasks)
 
 ## Accumulated Context
 
@@ -53,15 +56,19 @@
 | Pino for logging | 5x faster than Winston, stderr support critical | 1 | 2026-01-27 |
 | tsdav for CalDAV/CardDAV | 35k+ weekly downloads, TypeScript-native | 3 | 2026-01-27 |
 | ical.js for parsing | Zero dependencies, RFC 5545/6350 compliant | 2 | 2026-01-27 |
+| ESM modules with .js extensions | MCP SDK requires ESM with .js import extensions | 1 | 2026-01-27 |
+| Zod fail-fast validation | Catch config errors at startup, not runtime | 1 | 2026-01-27 |
+| HTTPS enforcement + localhost | Prevent credential exposure, allow local dev | 1 | 2026-01-27 |
+| pino.destination(2) for stderr | Explicit stderr routing prevents stdout contamination | 1 | 2026-01-27 |
 
 ### Active TODOs
 
 **Phase 1 (Foundation):**
-- Set up TypeScript project structure with MCP SDK
-- Implement Zod configuration schemas for env vars
-- Configure Pino logger with stderr destination
-- Enforce HTTPS requirement (reject HTTP except localhost)
-- Validate Basic Auth connection to CalDAV/CardDAV server
+- ✓ Set up TypeScript project structure with MCP SDK (01-01 complete)
+- ✓ Implement Zod configuration schemas for env vars (01-01 complete)
+- ✓ Configure Pino logger with stderr destination (01-01 complete)
+- ✓ Enforce HTTPS requirement (reject HTTP except localhost) (01-01 complete)
+- Validate Basic Auth connection to CalDAV/CardDAV server (01-02 planned)
 
 **Cross-Phase:**
 - Validate tsdav compatibility with SabreDAV (Phase 3 - CRITICAL)
@@ -85,24 +92,28 @@ None currently.
 
 ## Session Continuity
 
-**Last Session:** 2026-01-27 - Initial roadmap creation
+**Last Session:** 2026-01-27 - Completed 01-01 (Foundation Configuration)
+
+**Stopped at:** Completed 01-01-PLAN.md
+
+**Resume file:** None
 
 **Next Session Should:**
-1. Run `/gsd:plan-phase 1` to create execution plan for Foundation & Configuration
-2. Begin Phase 1 implementation with project setup and configuration
-3. Validate HTTPS enforcement and stderr logging early (critical pitfalls)
+1. Execute plan 01-02 (Basic Auth Validation)
+2. Test actual connection to CalDAV/CardDAV server
+3. Continue Phase 1 remaining plans (01-03, 01-04 if they exist)
 
 **Context for Next Developer:**
 - This is a TypeScript MCP server for CalDAV/CardDAV (read-only v1)
 - Critical path: Phase 3 CalDAV client validation against SabreDAV
-- Two must-address-immediately pitfalls: stdout contamination (breaks protocol) and HTTP security (credential exposure)
-- Research identified 6 phases aligned with architecture layers (foundation → client → services → integration)
-- Standard depth mode: 5-8 phases with 3-5 plans each, parallelization enabled
+- ✓ Foundation established: ESM project with Zod validation and Pino stderr logging
+- ✓ Critical pitfalls addressed: stdout contamination prevented, HTTPS enforced
+- Next: Validate actual connection to CalDAV/CardDAV server (01-02)
 
 **Open Questions:**
-- None currently (roadmap just created)
+- Will tsdav work with SabreDAV? (to be tested in Phase 3)
 
 ---
 
 *State initialized: 2026-01-27*
-*Last execution: Roadmap creation*
+*Last execution: 2026-01-27 - Completed 01-01 Foundation Configuration*
