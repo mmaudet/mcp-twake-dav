@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-27
 **Current Phase:** 5 of 6 - Contact Query Services
-**Current Plan:** 0 of 2 (Planned)
+**Current Plan:** 1 of 2 (In Progress)
 
 ## Project Reference
 
@@ -12,13 +12,13 @@
 
 ## Current Position
 
-**Phase:** 4 of 6 - Calendar Query Services
+**Phase:** 5 of 6 - Contact Query Services
 
-**Plan:** 2 of 2 (Complete)
+**Plan:** 1 of 2 (In Progress)
 
-**Status:** Phase 5 planned, ready for execution
+**Status:** In progress
 
-**Last activity:** 2026-01-27 - Phase 5 planned (2 plans, 2 waves, checker passed)
+**Last activity:** 2026-01-27 - Completed 05-01-PLAN.md
 
 **Progress:**
 ```
@@ -40,11 +40,11 @@
 - Phase 6: 0/0 requirements (validation)
 
 **Recent Completions:**
+- 2026-01-27: 05-01 - Contact Query Services Utilities (2 minutes, 2 tasks)
 - 2026-01-27: 04-02 - Calendar MCP Tools (2.1 minutes, 2 tasks) ✓ PHASE 4 COMPLETE
 - 2026-01-27: 04-01 - Shared Calendar Query Utilities (~2 minutes, 2 tasks)
 - 2026-01-27: 03-05 - Startup Wiring (2 minutes, 2 tasks) ✓ PHASE 3 COMPLETE
 - 2026-01-27: 03-04 - AddressBook Service (2 minutes, 1 task)
-- 2026-01-27: 03-03 - Calendar Service (timing unknown, 1 task)
 
 ## Accumulated Context
 
@@ -93,6 +93,9 @@
 | Calendar filter deferred to v2 | DAVCalendarObject doesn't carry calendar name; requires service layer changes | 4 | 2026-01-27 |
 | list_calendars tool inline in aggregator | Simple tool (single service call), avoid file proliferation | 4 | 2026-01-27 |
 | 30-day default for search_events | Balances performance (bounded query) with UX (typical upcoming meetings use case) | 4 | 2026-01-27 |
+| Case-insensitive contact search across multiple name fields | Users enter partial names expecting matches; searches formatted/given/family names per RFC 6352 | 5 | 2026-01-27 |
+| LLM-optimized contact formatting (no _raw/etag/uid) | Omitting internal metadata reduces token usage 5-10x, mirrors Phase 4 event formatting | 5 | 2026-01-27 |
+| Shared utils module for Phase 5 tools | DRY principle - all contact tools share search, formatting, fetch+transform logic | 5 | 2026-01-27 |
 
 ### Active TODOs
 
@@ -162,9 +165,9 @@ None currently.
 
 ## Session Continuity
 
-**Last Session:** 2026-01-27 - Phase 5 planned
+**Last Session:** 2026-01-27 - Completed 05-01-PLAN.md
 
-**Stopped at:** Phase 5 planned, ready for execution
+**Stopped at:** Completed 05-01-PLAN.md
 
 **Resume file:** None
 
