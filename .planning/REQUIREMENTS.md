@@ -188,17 +188,17 @@
 | CONW-02 | Phase 10 | Pending |
 | CONW-03 | Phase 10 | Pending |
 | ADV-01 | Phase 11 | Pending |
-| WINF-01 | Phase 7-8 | Pending |
-| WINF-02 | Phase 8 | Pending |
+| WINF-01 | Phase 7-8 | Complete |
+| WINF-02 | Phase 8 | Complete |
 | WINF-03 | Phase 7 | Complete |
 | WINF-04 | Phase 11 | Pending |
 | WINF-05 | Phase 9-10 | Pending |
 
 **Coverage:**
 - v1 requirements: 18 total -- 18 complete
-- v2 requirements: 12 total -- 1 complete
-- Total: 30 requirements (19 complete)
+- v2 requirements: 12 total -- 3 complete
+- Total: 30 requirements (21 complete)
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 -- WINF-03 marked complete after Phase 7*
+*Last updated: 2026-01-27 -- WINF-01, WINF-02 marked complete after Phase 8*

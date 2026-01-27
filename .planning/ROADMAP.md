@@ -316,8 +316,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md -- CalendarService write methods (createEvent, updateEvent, deleteEvent, findEventByUid) with TDD
-- [ ] 08-02-PLAN.md -- AddressBookService write methods (createContact, updateContact, deleteContact, findContactByUid) with TDD
+- [x] 08-01-PLAN.md -- CalendarService write methods (createEvent, updateEvent, deleteEvent, findEventByUid) with TDD
+- [x] 08-02-PLAN.md -- AddressBookService write methods (createContact, updateContact, deleteContact, findContactByUid) with TDD
 
 **Notes:**
 - Modified files: `src/caldav/calendar-service.ts`, `src/caldav/addressbook-service.ts`
@@ -326,7 +326,7 @@ Plans:
 - If tsdav response omits ETag header after PUT (server modification), re-fetch to obtain fresh ETag
 - Pitfalls addressed: ETag 412 (P2), missing ETag after PUT (P3), stale cache (P5), raw Response handling (P12), delete without ETag (P15)
 
-**Status:** Not Started
+**Status:** Complete (2026-01-27)
 
 ---
 
@@ -450,14 +450,14 @@ Plans:
 | 5 - Contact Query Services | v1 | CON-01 to CON-04 | Complete | 100% |
 | 6 - MCP Integration & Testing | v1 | (validation) | Complete | 100% |
 | 7 - Write Infrastructure & Reverse Transformers | v2 | WINF-01 (partial), WINF-03 | Complete | 100% |
-| 8 - Service Layer Write Methods | v2 | WINF-01 (complete), WINF-02 | Not Started | 0% |
+| 8 - Service Layer Write Methods | v2 | WINF-01 (complete), WINF-02 | Complete | 100% |
 | 9 - Calendar Write Tools | v2 | CALW-01, CALW-02, CALW-03, WINF-05 (cal) | Not Started | 0% |
 | 10 - Contact Write Tools | v2 | CONW-01, CONW-02, CONW-03, WINF-05 (con) | Not Started | 0% |
 | 11 - Free/Busy & MCP Annotations | v2 | ADV-01, WINF-04 | Not Started | 0% |
 
 **v1:** 18/18 requirements complete (100%)
-**v2:** 1/12 requirements complete (8%)
-**Overall:** 19/30 requirements complete (63%)
+**v2:** 3/12 requirements complete (25%)
+**Overall:** 21/30 requirements complete (70%)
 
 ## Milestone Status
 
@@ -475,4 +475,4 @@ Plans:
 
 ---
 
-*Last updated: 2026-01-27 after Phase 7 completion*
+*Last updated: 2026-01-27 after Phase 8 completion*
