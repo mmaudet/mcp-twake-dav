@@ -111,3 +111,25 @@ export function formatStartupError(error: Error, url?: string): string {
     'Verify DAV_URL and your auth settings (DAV_USERNAME/DAV_PASSWORD or DAV_AUTH_METHOD/DAV_TOKEN).',
   ].join('\n');
 }
+
+/**
+ * ConflictError - thrown when a CalDAV/CardDAV server returns HTTP 412 Precondition Failed
+ *
+ * This happens when an ETag mismatch is detected during optimistic concurrency control,
+ * indicating that the resource was modified by another client since it was last read.
+ */
+export class ConflictError extends Error {
+  constructor(resourceType: 'event' | 'contact', detail?: string) {
+    const message = [
+      `The ${resourceType} was modified by another client since you last read it.`,
+      '',
+      'Fix: Please fetch the latest version and try your changes again.',
+      detail || '',
+    ]
+      .filter((line) => line !== '')
+      .join('\n');
+
+    super(message);
+    this.name = 'ConflictError';
+  }
+}
