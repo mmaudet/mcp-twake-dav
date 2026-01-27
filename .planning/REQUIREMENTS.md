@@ -79,30 +79,30 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CAL-01 | — | Pending |
-| CAL-02 | — | Pending |
-| CAL-03 | — | Pending |
-| CAL-04 | — | Pending |
-| CAL-05 | — | Pending |
-| CAL-06 | — | Pending |
-| CAL-07 | — | Pending |
-| CAL-08 | — | Pending |
-| CON-01 | — | Pending |
-| CON-02 | — | Pending |
-| CON-03 | — | Pending |
-| CON-04 | — | Pending |
-| INF-01 | — | Pending |
-| INF-02 | — | Pending |
-| INF-03 | — | Pending |
-| INF-04 | — | Pending |
-| INF-05 | — | Pending |
-| INF-06 | — | Pending |
+| CAL-01 | Phase 4 | Pending |
+| CAL-02 | Phase 4 | Pending |
+| CAL-03 | Phase 4 | Pending |
+| CAL-04 | Phase 4 | Pending |
+| CAL-05 | Phase 3 | Pending |
+| CAL-06 | Phase 3 | Pending |
+| CAL-07 | Phase 4 | Pending |
+| CAL-08 | Phase 4 | Pending |
+| CON-01 | Phase 5 | Pending |
+| CON-02 | Phase 5 | Pending |
+| CON-03 | Phase 5 | Pending |
+| CON-04 | Phase 5 | Pending |
+| INF-01 | Phase 1 | Pending |
+| INF-02 | Phase 1 | Pending |
+| INF-03 | Phase 2 | Pending |
+| INF-04 | Phase 3 | Pending |
+| INF-05 | Phase 1 | Pending |
+| INF-06 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 after initial definition*
+*Last updated: 2026-01-27 after roadmap creation*
