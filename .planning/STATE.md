@@ -14,20 +14,20 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 ## Current Position
 
 Phase: 7 of 11 (Write Infrastructure & Reverse Transformers)
-Plan: 1 of 1 (completed)
-Status: Phase complete
-Last activity: 2026-01-27 -- Completed 07-01-PLAN.md
+Plan: 2 of 3 (07-01, 07-03 complete; 07-02 pending)
+Status: In progress
+Last activity: 2026-01-27 -- Completed 07-03-PLAN.md (contact builder TDD)
 
 Milestone: v2 - Write Operations & Free/Busy
 
-Progress: [||||||||||█.........] 60% (v1 complete + 1 v2 plan)
+Progress: [||||||||||██........] 63% (v1 complete + 2 v2 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17 (16 v1 + 1 v2)
-- v2 plans completed: 1
-- Total execution time: 1 min (v2 only; v1 metrics not tracked)
+- Total plans completed: 18 (16 v1 + 2 v2)
+- v2 plans completed: 2
+- Total execution time: 4 min (v2 only; v1 metrics not tracked)
 
 **By Phase:**
 
@@ -39,7 +39,7 @@ Progress: [||||||||||█.........] 60% (v1 complete + 1 v2 plan)
 | 4 - Calendar Query | 2 | Complete (v1) |
 | 5 - Contact Query | 2 | Complete (v1) |
 | 6 - Integration & Testing | 3 | Complete (v1) |
-| 7 - Write Infrastructure | 1 | Complete (v2) |
+| 7 - Write Infrastructure | 2 of 3 | In progress (v2) |
 
 ## Accumulated Context
 
@@ -57,6 +57,8 @@ Recent decisions affecting current work:
 - Zero new dependencies for v2
 - ConflictError follows "what went wrong + how to fix" pattern (Phase 7)
 - Write input types separate from read DTOs - CreateXInput/UpdateXInput pattern (Phase 7)
+- Name parsing splits on LAST space for multi-word given names (Phase 7 Plan 3)
+- Email/phone updates replace first property or add if none exists (Phase 7 Plan 3)
 
 ### Pending Todos
 
@@ -73,11 +75,11 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-01-27 -- Phase 7 Plan 1 complete
-Stopped at: Completed 07-01-PLAN.md (write infrastructure types and error handling)
+Last session: 2026-01-27 -- Phase 7 Plan 3 complete
+Stopped at: Completed 07-03-PLAN.md (contact builder TDD)
 Resume file: None
 
-Next: Plan Phase 8 (`/gsd:plan-phase 8`)
+Next: Execute 07-02-PLAN.md or plan Phase 8 (`/gsd:plan-phase 8`)
 
 ---
-*State updated: 2026-01-27 after completing Phase 7 Plan 1*
+*State updated: 2026-01-27 after completing Phase 7 Plan 3*
