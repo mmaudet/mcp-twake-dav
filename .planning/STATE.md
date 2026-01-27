@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-27
 **Current Phase:** 3 of 6 - CalDAV/CardDAV Client Integration
-**Current Plan:** 4 of 5 complete (03-01, 03-02, 03-03, 03-04 complete; 03-05 remaining)
+**Current Plan:** 5 of 5 complete (Phase 3 COMPLETE)
 
 ## Project Reference
 
@@ -14,11 +14,11 @@
 
 **Phase:** 3 of 6 - CalDAV/CardDAV Client Integration
 
-**Plan:** 4 of 5 complete (03-01, 03-02, 03-03, 03-04 complete; 03-05 remaining)
+**Plan:** 5 of 5 complete (Phase 3 COMPLETE)
 
-**Status:** In progress — executing Wave 2
+**Status:** Phase complete — ready for Phase 4 planning
 
-**Last activity:** 2026-01-27 - Completed 03-04-PLAN.md (AddressBook Service)
+**Last activity:** 2026-01-27 - Completed 03-05-PLAN.md (Startup Wiring)
 
 **Progress:**
 ```
@@ -40,11 +40,11 @@
 - Phase 6: 0/0 requirements (validation)
 
 **Recent Completions:**
+- 2026-01-27: 03-05 - Startup Wiring (2 minutes, 2 tasks) ✓ PHASE 3 COMPLETE
 - 2026-01-27: 03-04 - AddressBook Service (2 minutes, 1 task)
 - 2026-01-27: 03-03 - Calendar Service (timing unknown, 1 task)
 - 2026-01-27: 03-02 - Dual Client and Discovery (timing unknown, 2 tasks)
 - 2026-01-27: 03-01 - Cache and Retry Infrastructure (7 minutes, 2 tasks)
-- 2026-01-27: 02-02 - Contact and Recurrence Transformers (2 minutes, 2 tasks)
 
 ## Accumulated Context
 
@@ -82,6 +82,8 @@
 | Passive cache design | Cache doesn't call tsdav; services call isCollectionDirty then use cache | 3 | 2026-01-27 |
 | Logger from pino (type-only) in infra | Matches transformer pattern; not config/logger.js | 3 | 2026-01-27 |
 | Jitter enabled by default in retry | Prevents thundering herd on simultaneous retries | 3 | 2026-01-27 |
+| Services instantiated at startup (not tool registration) | CalendarService and AddressBookService ready before Phase 4/5 tool registration | 3 | 2026-01-27 |
+| Preserved validateConnection alongside validateDualConnection | Single-protocol validation still useful for testing/debugging | 3 | 2026-01-27 |
 
 ### Active TODOs
 
@@ -138,28 +140,29 @@ None currently.
 
 ## Session Continuity
 
-**Last Session:** 2026-01-27 - Completed 03-04
+**Last Session:** 2026-01-27 - Completed Phase 3
 
-**Stopped at:** Completed 03-04-PLAN.md (AddressBook Service)
+**Stopped at:** Completed 03-05-PLAN.md (Startup Wiring) - Phase 3 COMPLETE
 
 **Resume file:** None
 
 **Next Session Should:**
-1. Complete Phase 3 execution (03-05 remaining - startup wiring)
-2. Verify Phase 3 completion when all 5 plans done
-3. Plan Phase 4
+1. Verify Phase 3 completion (all 5 plans done)
+2. Plan Phase 4 (Calendar MCP Tools)
+3. Execute Phase 4
 
 **Context for Next Developer:**
 - This is a TypeScript MCP server for CalDAV/CardDAV (read-only v1)
 - Critical path: Phase 3 CalDAV client — tsdav + SabreDAV compatibility
 - ✓ Phase 1 COMPLETE: ESM project, config validation, stderr logging, HTTPS enforcement, CalDAV client wrapper, MCP entry point, AI-friendly errors
 - ✓ Phase 2 COMPLETE: EventDTO/ContactDTO types, event/contact transformers, timezone registration, RRULE expansion
-- Phase 3 PLANNED: 5 plans in 3 waves — dual-client, discovery, calendar/addressbook services, cache, retry, startup wiring
-- Key architecture: dual tsdav clients (CalDAV + CardDAV) with separate `defaultAccountType`
-- Key research: CTag-based caching via `isCollectionDirty()`, multiGet fallback for address books
+- ✓ Phase 3 COMPLETE: Dual tsdav clients, discovery, calendar/addressbook services, cache, retry, startup wiring
+- Server creates dual CalDAV/CardDAV clients at startup
+- CalendarService and AddressBookService initialized and ready for Phase 4/5 tool registration
+- CTag-based caching and retry infrastructure operational
 
 **Open Questions:**
-- Will tsdav work with SabreDAV? (to be tested during Phase 3 execution)
+- Will tsdav work with SabreDAV? (to be tested during Phase 6 integration testing)
 
 ---
 
