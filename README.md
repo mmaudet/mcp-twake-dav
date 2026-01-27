@@ -87,6 +87,8 @@ Standard username/password authentication. `DAV_AUTH_METHOD` can be omitted (def
 | `DAV_URL` | Yes | CalDAV/CardDAV server base URL (HTTPS required) | `https://dav.example.com` |
 | `DAV_USERNAME` | Yes | Authentication username | `user@example.com` |
 | `DAV_PASSWORD` | Yes | Authentication password | `your-password` |
+| `DAV_DEFAULT_CALENDAR` | No | Default calendar name to query (omit to query all) | `My Calendar` |
+| `DAV_DEFAULT_ADDRESSBOOK` | No | Default address book name to query (omit to query all) | `My Contacts` |
 
 #### Bearer Token
 
@@ -97,13 +99,13 @@ JWT Bearer token, sent as `Authorization: Bearer <token>`.
 | `DAV_URL` | Yes | CalDAV/CardDAV server base URL (HTTPS required) | `https://dav.example.com` |
 | `DAV_AUTH_METHOD` | Yes | Must be set to `bearer` | `bearer` |
 | `DAV_TOKEN` | Yes | JWT Bearer token | `eyJhbGciOiJSUzI1NiIs...` |
+| `DAV_DEFAULT_CALENDAR` | No | Default calendar name to query (omit to query all) | `My Calendar` |
+| `DAV_DEFAULT_ADDRESSBOOK` | No | Default address book name to query (omit to query all) | `My Contacts` |
 
 #### Optional
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DAV_DEFAULT_CALENDAR` | Default calendar name to query (omit to query all) | `My Calendar` |
-| `DAV_DEFAULT_ADDRESSBOOK` | Default address book name to query (omit to query all) | `My Contacts` |
 | `LOG_LEVEL` | Log verbosity: `fatal`, `error`, `warn`, `info`, `debug`, `trace` | `info` (default) |
 
 **Security Note:** HTTPS is enforced to prevent credential exposure. Only `localhost` and `127.0.0.1` are allowed over HTTP for development purposes.
