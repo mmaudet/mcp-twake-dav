@@ -1,49 +1,66 @@
 # State: mcp-twake
 
 **Last Updated:** 2026-01-27
-**Milestone:** v1 - COMPLETE
-**Status:** Milestone archived
+**Current Phase:** Not started (defining requirements)
+**Current Plan:** —
 
-## Milestone Summary
+## Project Reference
 
-**v1 - Read-only CalDAV/CardDAV MCP Server**
+**Core Value:** Users can ask an AI assistant questions about their CalDAV calendars and CardDAV contacts and get accurate answers from their own sovereign infrastructure.
 
-- **Requirements:** 18/18 complete (100%)
-- **Phases:** 6/6 complete
-- **Tests:** 13/13 passing (2 test files)
-- **npm:** Published as mcp-twake@0.1.1
-- **Audit:** PASS (2026-01-27)
+**Current Focus:** Milestone v2 — Write Operations & Free/Busy
 
-## What Was Delivered
+## Current Position
 
-### Core (18 requirements)
-- 9 MCP tools (5 calendar + 4 contact)
-- CalDAV/CardDAV integration via tsdav
-- CTag-based caching, retry with exponential backoff
-- iCalendar/vCard parsing via ical.js
-- Natural language date parsing via chrono-node
-- AI-friendly error messages
-- HTTPS enforcement
-- stdio transport for Claude Desktop/CLI
+**Phase:** Not started (defining requirements)
 
-### Bonus (post-roadmap)
-- Multi-auth: Basic, Bearer token, ESNToken
-- Calendar filtering: `calendar` param + `DAV_DEFAULT_CALENDAR`
-- Address book filtering: `addressbook` param + `DAV_DEFAULT_ADDRESSBOOK`
-- npm package with `npx mcp-twake` support
-- Community standards: CONTRIBUTING.md, issue templates, PR template, badges
+**Plan:** —
 
-## Archive
+**Status:** Defining requirements
 
-All v1 planning files archived to `.planning/archive/v1/`
+**Last activity:** 2026-01-27 — Milestone v2 started
 
-## Next Milestone
+**Milestone:** v2 - Write Operations & Free/Busy
 
-Not yet defined. Candidates for v2:
-- Write operations (create/update/delete events and contacts)
-- OAuth 2.0 authentication
-- HTTP SSE transport
-- Free/busy availability queries
+## Accumulated Context
+
+### Active Decisions
+
+Carried from v1:
+
+| Decision | Rationale | Phase | Date |
+|----------|-----------|-------|------|
+| TypeScript over Python | Aligns with MCP SDK reference implementation | 1 | 2026-01-27 |
+| tsdav for CalDAV/CardDAV | TypeScript-native, 35k+ weekly downloads, works with SabreDAV | 3 | 2026-01-27 |
+| ical.js for parsing | Zero dependencies, RFC 5545/6350 compliant | 2 | 2026-01-27 |
+| Simple recurring only for v2 | RECURRENCE-ID exception handling complex; whole-series covers 80% | — | 2026-01-27 |
+| AI-guided confirmation | Tool descriptions tell AI to confirm; no code enforcement | — | 2026-01-27 |
+
+### Known Blockers
+
+None currently.
+
+### Research Flags
+
+**Write operations — HIGH:**
+- CalDAV PUT with If-Match (ETag) for conflict detection
+- iCalendar generation (creating valid .ics from user input)
+- vCard generation (creating valid .vcf from user input)
+- tsdav write API surface (createCalendarObject, updateCalendarObject, deleteCalendarObject)
+
+**Free/busy — MEDIUM:**
+- CalDAV free-busy-query REPORT
+- tsdav support for free-busy queries
+- Privacy implications (what to expose)
+
+## Session Continuity
+
+**Last Session:** 2026-01-27 — v1 milestone completed, v2 milestone started
+
+**Next Session Should:**
+1. Complete research (if selected)
+2. Define REQUIREMENTS.md
+3. Create ROADMAP.md
 
 ---
-*v1 milestone completed: 2026-01-27*
+*State initialized: 2026-01-27 for milestone v2*
