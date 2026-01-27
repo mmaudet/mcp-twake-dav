@@ -13,6 +13,10 @@ import type { DAVClientType } from './client.js';
 import { CollectionCache } from './cache.js';
 import { withRetry } from './retry.js';
 import { discoverCalendars } from './discovery.js';
+import { randomUUID } from 'node:crypto';
+import { ConflictError } from '../errors.js';
+import { transformCalendarObject } from '../transformers/event.js';
+import type { EventDTO } from '../types/dtos.js';
 
 /**
  * ISO 8601 time range for server-side calendar filtering
@@ -234,5 +238,206 @@ export class CalendarService {
     );
 
     return flattened;
+  }
+
+  /**
+   * Create a new calendar event
+   *
+   * @param iCalString - Complete iCalendar string to create
+   * @param calendarName - Optional calendar display name (case-insensitive), defaults to first calendar
+   * @returns Object with url and etag of the created event
+   * @throws ConflictError if 412 response (event with this UID already exists)
+   * @throws Error if calendar not found or creation fails
+   */
+  async createEvent(
+    iCalString: string,
+    calendarName?: string
+  ): Promise<{ url: string; etag: string | undefined }> {
+    // Resolve target calendar
+    await this.listCalendars();
+    let targetCalendar: DAVCalendar;
+
+    if (calendarName) {
+      const match = this.calendars.find(
+        (cal) => String(cal.displayName || '').toLowerCase() === calendarName.toLowerCase()
+      );
+      if (!match) {
+        throw new Error(`Calendar "${calendarName}" not found`);
+      }
+      targetCalendar = match;
+    } else {
+      targetCalendar = this.calendars[0];
+    }
+
+    // Generate filename
+    const filename = `${randomUUID()}.ics`;
+
+    // Call tsdav createCalendarObject with retry
+    const response = await withRetry(
+      () => this.client.createCalendarObject({
+        calendar: targetCalendar,
+        iCalString,
+        filename,
+      }),
+      this.logger
+    );
+
+    // Check response
+    if (!response.ok) {
+      if (response.status === 412) {
+        throw new ConflictError(
+          'event',
+          'An event with this UID already exists. Use a different UID or update the existing event.'
+        );
+      }
+      throw new Error(`Failed to create event: HTTP ${response.status}`);
+    }
+
+    // Extract etag from response headers
+    const etag = response.headers?.get('etag') ?? undefined;
+
+    // Invalidate cache for the calendar
+    this.objectCache.invalidate(targetCalendar.url);
+
+    // Build result URL
+    const resultUrl = new URL(filename, targetCalendar.url).href;
+
+    this.logger.info({ url: resultUrl, calendar: targetCalendar.url }, 'Created calendar event');
+
+    return { url: resultUrl, etag };
+  }
+
+  /**
+   * Update an existing calendar event
+   *
+   * @param url - Full URL of the event to update
+   * @param iCalString - Updated iCalendar string
+   * @param etag - Current ETag for optimistic concurrency control
+   * @returns Object with new etag
+   * @throws ConflictError if 412 response (event modified by another client)
+   * @throws Error if update fails
+   */
+  async updateEvent(
+    url: string,
+    iCalString: string,
+    etag: string
+  ): Promise<{ etag: string | undefined }> {
+    // Call tsdav updateCalendarObject with retry
+    const response = await withRetry(
+      () => this.client.updateCalendarObject({
+        calendarObject: {
+          url,
+          data: iCalString,
+          etag,
+        },
+      }),
+      this.logger
+    );
+
+    // Check response
+    if (!response.ok) {
+      if (response.status === 412) {
+        throw new ConflictError('event');
+      }
+      throw new Error(`Failed to update event: HTTP ${response.status}`);
+    }
+
+    // Extract new etag from response headers
+    const newEtag = response.headers?.get('etag') ?? undefined;
+
+    // Invalidate cache for the collection
+    const collectionUrl = url.substring(0, url.lastIndexOf('/') + 1);
+    this.objectCache.invalidate(collectionUrl);
+
+    this.logger.info({ url, collectionUrl }, 'Updated calendar event');
+
+    return { etag: newEtag };
+  }
+
+  /**
+   * Delete a calendar event
+   *
+   * @param url - Full URL of the event to delete
+   * @param etag - Optional ETag for optimistic concurrency control (fetched if missing)
+   * @throws ConflictError if 412 response (event modified by another client)
+   * @throws Error if event not found or deletion fails
+   */
+  async deleteEvent(url: string, etag?: string): Promise<void> {
+    let resolvedEtag = etag;
+
+    // If etag is missing, fetch fresh etag
+    if (!resolvedEtag) {
+      this.logger.debug({ url }, 'ETag missing, fetching fresh ETag for delete');
+
+      // Extract collection URL
+      const collectionUrl = url.substring(0, url.lastIndexOf('/') + 1);
+
+      // Fetch all objects in the collection
+      const objects = await withRetry(
+        () => this.client.fetchCalendarObjects({
+          calendar: { url: collectionUrl } as DAVCalendar,
+        }),
+        this.logger
+      );
+
+      // Find the matching object
+      const matchingObject = objects.find((obj) => obj.url === url);
+      if (!matchingObject || !matchingObject.etag) {
+        throw new Error('Cannot delete: event not found or ETag unavailable');
+      }
+
+      resolvedEtag = matchingObject.etag;
+    }
+
+    // Call tsdav deleteCalendarObject with retry
+    const response = await withRetry(
+      () => this.client.deleteCalendarObject({
+        calendarObject: {
+          url,
+          etag: resolvedEtag!,
+        },
+      }),
+      this.logger
+    );
+
+    // Check response
+    if (!response.ok) {
+      if (response.status === 412) {
+        throw new ConflictError('event');
+      }
+      throw new Error(`Failed to delete event: HTTP ${response.status}`);
+    }
+
+    // Invalidate cache for the collection
+    const collectionUrl = url.substring(0, url.lastIndexOf('/') + 1);
+    this.objectCache.invalidate(collectionUrl);
+
+    this.logger.info({ url, collectionUrl }, 'Deleted calendar event');
+  }
+
+  /**
+   * Find an event by UID across all calendars or a specific calendar
+   *
+   * @param uid - The UID of the event to find
+   * @param calendarName - Optional calendar display name to search in (case-insensitive)
+   * @returns EventDTO with full data including _raw, etag, url, or null if not found
+   */
+  async findEventByUid(uid: string, calendarName?: string): Promise<EventDTO | null> {
+    // Fetch raw calendar objects
+    const rawObjects = calendarName
+      ? await this.fetchEventsByCalendarName(calendarName)
+      : await this.fetchAllEvents();
+
+    // Transform and search for matching UID
+    for (const obj of rawObjects) {
+      const eventDTO = transformCalendarObject(obj, this.logger);
+      if (eventDTO && eventDTO.uid === uid) {
+        this.logger.debug({ uid, url: eventDTO.url }, 'Found event by UID');
+        return eventDTO;
+      }
+    }
+
+    this.logger.debug({ uid }, 'Event not found by UID');
+    return null;
   }
 }
