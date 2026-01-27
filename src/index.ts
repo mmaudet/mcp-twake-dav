@@ -12,7 +12,6 @@
  * CRITICAL: All logs go to stderr. stdout is reserved for MCP JSON-RPC protocol.
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig } from './config/schema.js';
 import { createLogger } from './config/logger.js';
@@ -20,7 +19,7 @@ import { createDualClients, validateDualConnection } from './caldav/client.js';
 import { CalendarService } from './caldav/calendar-service.js';
 import { AddressBookService } from './caldav/addressbook-service.js';
 import { formatStartupError } from './errors.js';
-import { registerAllTools } from './tools/index.js';
+import { createServer } from './server.js';
 
 /**
  * Main entry point with full startup validation
@@ -49,16 +48,8 @@ async function main() {
     const addressBookService = new AddressBookService(clients.carddav, logger);
     logger.info('Calendar and AddressBook services initialized');
 
-    // Step 6: Initialize MCP server
-    const server = new McpServer({
-      name: 'mcp-twake',
-      version: '0.1.0',
-    });
-
-    // Register calendar and contact query tools (Phase 4 + Phase 5)
-    registerAllTools(server, calendarService, addressBookService, logger);
-    logger.info('Calendar and contact tools registered');
-
+    // Step 6: Initialize MCP server with tools registered
+    const server = createServer(calendarService, addressBookService, logger);
     logger.info('MCP server initialized');
 
     // Step 7: Connect stdio transport
