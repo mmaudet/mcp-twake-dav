@@ -1,0 +1,36 @@
+{
+  "name": "mcp-twake",
+  "version": "0.1.0",
+  "description": "MCP server for CalDAV/CardDAV calendars and contacts",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "mcp-twake": "build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "tsc --watch"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "caldav",
+    "carddav",
+    "calendar",
+    "contacts"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.3",
+    "pino": "^10.3.0",
+    "tsdav": "^2.1.6",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "typescript": "^5.9.3"
+  }
+}
