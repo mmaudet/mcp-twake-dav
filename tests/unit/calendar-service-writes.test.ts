@@ -10,6 +10,7 @@ import pino from 'pino';
 import { CalendarService } from '../../src/caldav/calendar-service.js';
 import { ConflictError } from '../../src/errors.js';
 import type { DAVCalendar, DAVClient } from 'tsdav';
+import type { Config } from '../../src/config/schema.js';
 
 describe('CalendarService write methods', () => {
   let mockClient: any;
@@ -52,7 +53,14 @@ describe('CalendarService write methods', () => {
 
     // Create real logger and service
     logger = pino({ level: 'silent' });
-    service = new CalendarService(mockClient, logger);
+    const mockConfig = {
+      DAV_URL: 'https://dav.example.com',
+      DAV_AUTH_METHOD: 'basic',
+      DAV_USERNAME: 'user',
+      DAV_PASSWORD: 'pass',
+      LOG_LEVEL: 'info',
+    } as Config;
+    service = new CalendarService(mockClient, logger, mockConfig);
 
     // Pre-seed service with test calendar to skip discovery
     service['calendars'] = [testCalendar];

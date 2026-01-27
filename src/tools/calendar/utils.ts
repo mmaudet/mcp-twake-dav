@@ -16,7 +16,7 @@ import ICAL from 'ical.js';
 import type { Logger } from 'pino';
 import type { DAVCalendarObject } from 'tsdav';
 import type { CalendarService, TimeRange } from '../../caldav/calendar-service.js';
-import type { EventDTO } from '../../types/dtos.js';
+import type { EventDTO, FreeBusyPeriod } from '../../types/dtos.js';
 import { transformCalendarObject } from '../../transformers/event.js';
 import { expandRecurringEvent } from '../../transformers/recurrence.js';
 
@@ -313,4 +313,87 @@ export async function resolveCalendarEvents(
     return calendarService.fetchEventsByCalendarName(target, timeRange);
   }
   return calendarService.fetchAllEvents(timeRange);
+}
+
+/**
+ * Merge overlapping busy periods into non-overlapping intervals
+ *
+ * Sorts periods by start time, then merges any that overlap or are adjacent.
+ * All merged periods get type 'BUSY'.
+ *
+ * @param periods - Array of FreeBusyPeriod to merge
+ * @returns Merged array with no overlapping periods
+ */
+export function mergeBusyPeriods(periods: FreeBusyPeriod[]): FreeBusyPeriod[] {
+  if (periods.length === 0) {
+    return [];
+  }
+
+  // Sort by start time ascending
+  const sorted = [...periods].sort(
+    (a, b) => a.start.getTime() - b.start.getTime()
+  );
+
+  const merged: FreeBusyPeriod[] = [{ ...sorted[0], type: 'BUSY' }];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const current = sorted[i];
+    const lastMerged = merged[merged.length - 1];
+
+    if (lastMerged.end >= current.start) {
+      // Overlapping or adjacent: extend end to max
+      lastMerged.end = new Date(
+        Math.max(lastMerged.end.getTime(), current.end.getTime())
+      );
+    } else {
+      // No overlap: push as new period
+      merged.push({ ...current, type: 'BUSY' });
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Compute busy periods from a list of events
+ *
+ * Parses each event's raw iCalendar data to check the TRANSP property.
+ * Events with TRANSP=TRANSPARENT are skipped (they don't block time).
+ * Remaining events are converted to FreeBusyPeriod and merged.
+ *
+ * @param events - Array of EventDTO with _raw iCalendar data
+ * @param logger - Logger for debug/error output
+ * @returns Merged array of busy periods
+ */
+export function computeBusyPeriods(events: EventDTO[], logger: Logger): FreeBusyPeriod[] {
+  const periods: FreeBusyPeriod[] = [];
+
+  for (const event of events) {
+    try {
+      const jcalData = ICAL.parse(event._raw);
+      const comp = new ICAL.Component(jcalData);
+      const vevent = comp.getFirstSubcomponent('vevent');
+
+      if (!vevent) {
+        continue;
+      }
+
+      // Check transparency: TRANSPARENT events don't block time
+      const transp = vevent.getFirstPropertyValue('transp');
+      if (transp && String(transp).toUpperCase() === 'TRANSPARENT') {
+        logger.debug({ uid: event.uid }, 'Skipping TRANSPARENT event');
+        continue;
+      }
+
+      periods.push({
+        start: event.startDate,
+        end: event.endDate,
+        type: 'BUSY',
+      });
+    } catch (err) {
+      logger.debug({ err, uid: event.uid }, 'Failed to parse event for busy period computation');
+    }
+  }
+
+  return mergeBusyPeriods(periods);
 }

@@ -44,7 +44,7 @@ async function main() {
     logger.info({ calendarCount, addressBookCount }, 'CalDAV/CardDAV clients ready');
 
     // Step 5: Initialize services
-    const calendarService = new CalendarService(clients.caldav, logger);
+    const calendarService = new CalendarService(clients.caldav, logger, config);
     const addressBookService = new AddressBookService(clients.carddav, logger);
     logger.info('Calendar and AddressBook services initialized');
 

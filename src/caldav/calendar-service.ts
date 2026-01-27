@@ -10,6 +10,7 @@
 import type { Logger } from 'pino';
 import type { DAVCalendar, DAVCalendarObject } from 'tsdav';
 import type { DAVClientType } from './client.js';
+import type { Config } from '../config/schema.js';
 import { CollectionCache } from './cache.js';
 import { withRetry } from './retry.js';
 import { discoverCalendars } from './discovery.js';
@@ -47,6 +48,7 @@ export interface TimeRange {
 export class CalendarService {
   private readonly client: DAVClientType;
   private readonly logger: Logger;
+  private readonly config: Config;
   private readonly objectCache: CollectionCache<DAVCalendarObject>;
   private calendars: DAVCalendar[] = [];
 
@@ -55,11 +57,34 @@ export class CalendarService {
    *
    * @param client - CalDAV client instance (defaultAccountType: 'caldav')
    * @param logger - Pino logger for info/debug/error messages
+   * @param config - Validated configuration for auth header reconstruction
    */
-  constructor(client: DAVClientType, logger: Logger) {
+  constructor(client: DAVClientType, logger: Logger, config: Config) {
     this.client = client;
     this.logger = logger;
+    this.config = config;
     this.objectCache = new CollectionCache<DAVCalendarObject>(logger);
+  }
+
+  /**
+   * Build authentication headers matching the configured auth method.
+   *
+   * Used to inject auth into standalone tsdav functions (e.g., freeBusyQuery)
+   * that don't use the client's built-in auth.
+   *
+   * @returns Record with the appropriate authorization header
+   */
+  getAuthHeaders(): Record<string, string> {
+    if (this.config.DAV_AUTH_METHOD === 'bearer') {
+      return { authorization: `Bearer ${this.config.DAV_TOKEN}` };
+    }
+    if (this.config.DAV_AUTH_METHOD === 'esntoken') {
+      return { ESNToken: this.config.DAV_TOKEN! };
+    }
+    const basicToken = Buffer.from(
+      `${this.config.DAV_USERNAME}:${this.config.DAV_PASSWORD}`
+    ).toString('base64');
+    return { authorization: `Basic ${basicToken}` };
   }
 
   /**
