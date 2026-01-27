@@ -15,10 +15,18 @@ import type { Logger } from '../config/logger.js';
 export type DAVClientType = Awaited<ReturnType<typeof createDAVClient>>;
 
 /**
- * Create a CalDAV/CardDAV client configured with Basic Auth
+ * Interface for dual CalDAV and CardDAV clients
+ */
+export interface DualClients {
+  caldav: DAVClientType;
+  carddav: DAVClientType;
+}
+
+/**
+ * Create a CalDAV client configured with Basic Auth
  *
  * @param config - Validated configuration with DAV_URL, DAV_USERNAME, DAV_PASSWORD
- * @returns Configured DAV client
+ * @returns Configured CalDAV client
  */
 export function createCalDAVClient(config: Config): Promise<DAVClientType> {
   return createDAVClient({
@@ -30,6 +38,43 @@ export function createCalDAVClient(config: Config): Promise<DAVClientType> {
     authMethod: 'Basic',
     defaultAccountType: 'caldav',
   });
+}
+
+/**
+ * Create a CardDAV client configured with Basic Auth
+ *
+ * @param config - Validated configuration with DAV_URL, DAV_USERNAME, DAV_PASSWORD
+ * @returns Configured CardDAV client
+ */
+export function createCardDAVClient(config: Config): Promise<DAVClientType> {
+  return createDAVClient({
+    serverUrl: config.DAV_URL,
+    credentials: {
+      username: config.DAV_USERNAME,
+      password: config.DAV_PASSWORD,
+    },
+    authMethod: 'Basic',
+    defaultAccountType: 'carddav',
+  });
+}
+
+/**
+ * Create both CalDAV and CardDAV clients in parallel
+ *
+ * @param config - Validated configuration with DAV_URL, DAV_USERNAME, DAV_PASSWORD
+ * @param logger - Logger instance for info messages
+ * @returns Object with both clients
+ */
+export async function createDualClients(config: Config, logger: Logger): Promise<DualClients> {
+  logger.info({ url: config.DAV_URL }, 'Creating CalDAV and CardDAV clients...');
+
+  const [caldav, carddav] = await Promise.all([
+    createCalDAVClient(config),
+    createCardDAVClient(config),
+  ]);
+
+  logger.info('Both CalDAV and CardDAV clients created successfully');
+  return { caldav, carddav };
 }
 
 /**
