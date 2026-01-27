@@ -313,7 +313,11 @@ Plans:
 7. 412 Precondition Failed from tsdav propagated as `ConflictError` with actionable message ("Event was modified by another client. Please retry.")
 8. Subsequent reads after any write return fresh data (cache invalidation verified)
 
-**Plans:** TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md -- CalendarService write methods (createEvent, updateEvent, deleteEvent, findEventByUid) with TDD
+- [ ] 08-02-PLAN.md -- AddressBookService write methods (createContact, updateContact, deleteContact, findContactByUid) with TDD
 
 **Notes:**
 - Modified files: `src/caldav/calendar-service.ts`, `src/caldav/addressbook-service.ts`
