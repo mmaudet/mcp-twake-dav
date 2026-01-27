@@ -35,47 +35,126 @@
 - [x] **INF-05**: Server runs over stdio transport (MCP SDK)
 - [x] **INF-06**: Configuration via environment variables (CALDAV_URL, CALDAV_USERNAME, CALDAV_PASSWORD)
 
-## v2 Requirements
+## v2 Requirements — Write Operations & Free/Busy
 
 ### Calendar Write
 
-- **CALW-01**: User can create a new calendar event
-- **CALW-02**: User can update an existing event
-- **CALW-03**: User can delete an event
+- [ ] **CALW-01**: User can create a new calendar event via `create_event` tool
+  - Parameters: title (required), start (required), end (required), description, location, calendar, allDay, recurrence
+  - Natural language date support via chrono-node (e.g., "tomorrow at 2pm")
+  - All-day events supported via `allDay` boolean (DATE vs DATE-TIME format)
+  - Recurring events supported via `recurrence` parameter (RRULE string, e.g., "FREQ=WEEKLY;BYDAY=MO")
+  - No attendees parameter in v2 (scheduling side-effects risk — SabreDAV auto-sends invitations)
+  - Generates valid iCalendar with PRODID, VERSION, UID (crypto.randomUUID), DTSTAMP
+  - Uses `If-None-Match: *` to prevent overwriting existing resource
+  - Invalidates collection cache after successful creation
+  - Tool description instructs AI to confirm with user before creating
+
+- [ ] **CALW-02**: User can update an existing calendar event via `update_event` tool
+  - Parameters: uid (required), plus any changeable field (title, start, end, description, location)
+  - Finds event by UID across all calendars (or specified calendar)
+  - Parse-modify-serialize pattern on `_raw` iCalendar (preserves VALARM, X-properties, ATTENDEE params)
+  - Updates DTSTAMP, LAST-MODIFIED, and increments SEQUENCE
+  - Safety check: RRULE preserved after modification on recurring events
+  - Uses `If-Match: <etag>` for optimistic concurrency (ETag-based conflict detection)
+  - 412 Precondition Failed surfaced as ConflictError with actionable message
+  - Warns user if event has attendees (potential re-invitation emails)
+  - Invalidates collection cache after successful update
+  - Tool description instructs AI to confirm changes with user
+
+- [ ] **CALW-03**: User can delete a calendar event via `delete_event` tool
+  - Parameters: uid (required), calendar (optional)
+  - Finds event by UID across all calendars (or specified calendar)
+  - Uses `If-Match: <etag>` for conflict detection; fetches fresh ETag if missing
+  - Warns user if event has attendees (potential cancellation emails)
+  - Invalidates collection cache after successful deletion
+  - Tool description instructs AI to confirm deletion with user
+  - MCP annotation: `destructiveHint: true`
 
 ### Contact Write
 
-- **CONW-01**: User can create a new contact
-- **CONW-02**: User can update an existing contact
-- **CONW-03**: User can delete a contact
+- [ ] **CONW-01**: User can create a new contact via `create_contact` tool
+  - Parameters: name (required), email, phone, organization, addressbook
+  - Generates valid vCard 3.0 with VERSION, FN, N, UID (crypto.randomUUID)
+  - Uses `If-None-Match: *` to prevent overwriting existing resource
+  - Invalidates collection cache after successful creation
+  - Tool description instructs AI to confirm with user before creating
 
-### Authentication
+- [ ] **CONW-02**: User can update an existing contact via `update_contact` tool
+  - Parameters: uid (required), plus any changeable field (name, email, phone, organization)
+  - Finds contact by UID across all address books (or specified addressbook)
+  - Parse-modify-serialize pattern on `_raw` vCard (preserves photos, groups, custom fields)
+  - Preserves existing vCard version (3.0 or 4.0) during updates
+  - Uses `If-Match: <etag>` for optimistic concurrency
+  - 412 Precondition Failed surfaced as ConflictError
+  - Invalidates collection cache after successful update
+  - Tool description instructs AI to confirm changes with user
 
-- **AUTH-01**: Server supports OAuth 2.0 authentication
-- **AUTH-02**: Server supports token-based authentication
+- [ ] **CONW-03**: User can delete a contact via `delete_contact` tool
+  - Parameters: uid (required), addressbook (optional)
+  - Finds contact by UID across all address books (or specified addressbook)
+  - Uses `If-Match: <etag>` for conflict detection; fetches fresh ETag if missing
+  - Invalidates collection cache after successful deletion
+  - Tool description instructs AI to confirm deletion with user
+  - MCP annotation: `destructiveHint: true`
 
-### Transport
+### Availability
 
-- **TRANS-01**: Server supports HTTP SSE transport for web-based MCP clients
+- [ ] **ADV-01**: User can check free/busy availability via `check_availability` tool
+  - Parameters: start (required), end (required), calendar (optional)
+  - Dual-path: server-side free-busy-query REPORT (RFC 4791 s7.10) with automatic client-side fallback
+  - Client-side fallback: fetches events in range, computes busy periods (excludes TRANSPARENT events)
+  - Returns list of busy periods with start/end times
+  - Handles servers without Schedule plugin gracefully (400/404/501 -> fallback)
+  - Natural language date support for start/end
 
-### Advanced
+### Write Infrastructure
 
-- **ADV-01**: Free/busy availability queries
-- **ADV-02**: Multi-user / multi-tenant support
+- [ ] **WINF-01**: Write operations use ETag-based optimistic concurrency control
+  - Creates use `If-None-Match: *` (tsdav automatic)
+  - Updates use `If-Match: <current-etag>`
+  - Deletes use `If-Match: <current-etag>` with fresh ETag fetch if missing
+  - 412 Precondition Failed -> ConflictError with AI-friendly message
 
-## Out of Scope
+- [ ] **WINF-02**: Cache invalidated after every successful write operation
+  - `CollectionCache.invalidate(collectionUrl)` called after create/update/delete
+  - Subsequent reads return fresh data
+
+- [ ] **WINF-03**: Updates preserve all existing iCalendar/vCard properties (non-lossy round-trip)
+  - Parse `_raw` with ical.js -> modify specific properties -> re-serialize
+  - VALARM, X-properties, ATTENDEE parameters, PHOTO, custom fields all survive
+  - Never build from scratch during updates
+
+- [ ] **WINF-04**: MCP tool annotations applied to all tools (read and write)
+  - Write tools: `destructiveHint: true` (update/delete), `readOnlyHint: false`
+  - Create tools: `destructiveHint: false`, `readOnlyHint: false`
+  - Read tools: `readOnlyHint: true`
+  - All tools: `openWorldHint: true` (CalDAV data may change externally)
+
+- [ ] **WINF-05**: Tool descriptions guide AI to confirm with user before mutations
+  - All write tool descriptions include "IMPORTANT: Confirm with the user before proceeding"
+  - No code-level confirmation enforcement (tools remain composable)
+
+## Out of Scope (v2)
 
 | Feature | Reason |
 |---------|--------|
-| Write operations (create/update/delete) | Deferred to v2 — read-only safety for v1 |
-| OAuth / token auth | Basic auth sufficient for v1 SabreDAV |
+| Individual recurring occurrence edits (RECURRENCE-ID) | Series-level only for v2 — exception handling is complex |
+| Attendee management on create_event | SabreDAV auto-sends invitations via RFC 6638 scheduling |
+| OAuth 2.0 authentication | Basic auth + Bearer token sufficient (AUTH-02 delivered in v1) |
 | HTTP SSE transport | stdio covers Claude Desktop/CLI |
-| Real-time notifications / webhooks | Read-only polling model for v1 |
-| Multi-user / multi-tenant | Single-user configuration for v1 |
-| Web UI or mobile app | Headless MCP server by design |
-| Calendar attachment handling | Security risk, defer or never |
+| Real-time notifications / webhooks | Polling model sufficient |
+| Mobile app or web UI | Headless MCP server by design |
+| Multi-user / multi-tenant support | Single-user configuration |
+| Code-level confirmation enforcement | Tool descriptions guide AI behavior |
+| Calendar/addressbook creation (MKCALENDAR) | Not a common user request |
+| Attachment handling | Security risk, complex |
+| Batch operations / undo | Complexity vs. value |
+| iMIP scheduling (invitation sending) | Requires ORGANIZER/ATTENDEE, side-effects risk |
 
 ## Traceability
+
+### v1 (Complete)
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -98,11 +177,28 @@
 | INF-05 | Phase 1 | Complete |
 | INF-06 | Phase 1 | Complete |
 
+### v2 (Active)
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| CALW-01 | Phase 9 | Pending |
+| CALW-02 | Phase 9 | Pending |
+| CALW-03 | Phase 9 | Pending |
+| CONW-01 | Phase 10 | Pending |
+| CONW-02 | Phase 10 | Pending |
+| CONW-03 | Phase 10 | Pending |
+| ADV-01 | Phase 11 | Pending |
+| WINF-01 | Phase 7-8 | Pending |
+| WINF-02 | Phase 8 | Pending |
+| WINF-03 | Phase 7 | Pending |
+| WINF-04 | Phase 11 | Pending |
+| WINF-05 | Phase 9-10 | Pending |
+
 **Coverage:**
-- v1 requirements: 18 total
-- Mapped to phases: 18
-- Unmapped: 0
+- v1 requirements: 18 total -- 18 complete
+- v2 requirements: 12 total -- 0 complete
+- Total: 30 requirements
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 after Phase 5 completion*
+*Last updated: 2026-01-27 -- v2 traceability updated with roadmap phase numbers (7-11)*
