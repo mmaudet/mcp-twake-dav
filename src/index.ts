@@ -16,7 +16,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig } from './config/schema.js';
 import { createLogger } from './config/logger.js';
-import { validateConnection } from './caldav/client.js';
+import { createDualClients, validateDualConnection } from './caldav/client.js';
+import { CalendarService } from './caldav/calendar-service.js';
+import { AddressBookService } from './caldav/addressbook-service.js';
 import { formatStartupError } from './errors.js';
 
 /**
@@ -34,19 +36,28 @@ async function main() {
     const logger = createLogger(config.LOG_LEVEL);
     logger.info({ version: '0.1.0' }, 'Starting mcp-twake server');
 
-    // Step 3: Test CalDAV/CardDAV connection
-    const client = await validateConnection(config, logger);
-    logger.info('CalDAV/CardDAV client ready');
+    // Step 3: Create dual CalDAV/CardDAV clients
+    const clients = await createDualClients(config, logger);
 
-    // Step 4: Initialize MCP server
+    // Step 4: Validate connection (discovers calendars + address books)
+    const { calendarCount, addressBookCount } = await validateDualConnection(clients, config, logger);
+    logger.info({ calendarCount, addressBookCount }, 'CalDAV/CardDAV clients ready');
+
+    // Step 5: Initialize services
+    const calendarService = new CalendarService(clients.caldav, logger);
+    const addressBookService = new AddressBookService(clients.carddav, logger);
+    logger.info('Calendar and AddressBook services initialized');
+
+    // Step 6: Initialize MCP server
     const server = new McpServer({
       name: 'mcp-twake',
       version: '0.1.0',
     });
 
+    // TODO (Phase 4/5): Register MCP tools using calendarService and addressBookService
     logger.info('MCP server initialized');
 
-    // Step 5: Connect stdio transport
+    // Step 7: Connect stdio transport
     const transport = new StdioServerTransport();
     await server.connect(transport);
 
