@@ -207,13 +207,20 @@ Plans:
 - (All requirements validated end-to-end)
 
 **Success Criteria:**
-1. All 8 MCP tools registered and discoverable in Claude Desktop (list_calendars, get_next_event, get_events_today, query_events, search_events, search_contacts, get_contact, list_contacts)
-2. User can complete all validated use cases through Claude conversation (next event, today's schedule, weekly view, event search, contact lookup)
-3. Server tested successfully against 3 SabreDAV implementations (dav.linagora.com, Nextcloud, Zimbra or iCloud)
+1. All 9 MCP tools registered and discoverable in Claude Desktop
+2. User can complete all validated use cases through Claude conversation
+3. Server tested successfully against SabreDAV implementations
 4. Error handling validated (invalid credentials, network failures, malformed data)
-5. Performance acceptable (calendar queries < 2s, contact queries < 1s for typical data volumes)
+5. Performance acceptable (calendar queries < 2s, contact queries < 1s)
 6. README documentation complete with setup instructions and troubleshooting guide
 7. All v1 requirements verified and marked complete
+
+**Plans:** 3 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Refactor server for testability + Vitest integration tests for MCP protocol contracts
+- [ ] 06-02-PLAN.md — README documentation + AGPL-3.0 LICENSE file
+- [ ] 06-03-PLAN.md — Build verification + Claude Desktop end-to-end human verification
 
 **Notes:**
 - End-to-end validation with real Claude Desktop integration
@@ -221,9 +228,8 @@ Plans:
 - Production hardening (connection pooling tuning, cache TTL optimization)
 - Documentation includes HTTPS requirement, environment variable setup
 - AGPL-3.0 license applied, sovereign infrastructure positioning documented
-- Research flag: MEDIUM (may discover server-specific quirks)
 
-**Status:** Pending
+**Status:** In Progress
 
 ---
 
@@ -236,14 +242,14 @@ Plans:
 | 3 - CalDAV/CardDAV Client | CAL-05, CAL-06, INF-04 | Complete | 100% |
 | 4 - Calendar Query Services | CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08 | Complete | 100% |
 | 5 - Contact Query Services | CON-01, CON-02, CON-03, CON-04 | Complete | 100% |
-| 6 - MCP Integration & Testing | (validation) | Pending | 0% |
+| 6 - MCP Integration & Testing | (validation) | In Progress | 0% |
 
 **Overall:** 18/18 requirements complete (100%)
 
 ## Next Steps
 
-1. Phase 6: MCP Integration & Testing (end-to-end validation)
+1. Execute Phase 6: MCP Integration & Testing (3 plans, 2 waves)
 
 ---
 
-*Last updated: 2026-01-27 after Phase 5 completion*
+*Last updated: 2026-01-27 after Phase 6 planning*
