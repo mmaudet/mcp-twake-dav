@@ -183,8 +183,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Shared contact query utilities (search, format, fetch+transform)
-- [ ] 05-02-PLAN.md — Contact MCP tools (4 tools) + wire into entry point
+- [x] 05-01-PLAN.md — Shared contact query utilities (search, format, fetch+transform)
+- [x] 05-02-PLAN.md — Contact MCP tools (4 tools) + wire into entry point
 
 **Notes:**
 - No new dependencies — uses existing AddressBookService (Phase 3) + transformVCard (Phase 2)
@@ -193,7 +193,7 @@ Plans:
 - LLM-optimized formatting (no _raw/etag/url in output)
 - Mirrors Phase 4 calendar tool architecture
 
-**Status:** Pending
+**Status:** Complete
 
 ---
 
@@ -235,17 +235,15 @@ Plans:
 | 2 - Data Transformation | INF-03 | Complete | 100% |
 | 3 - CalDAV/CardDAV Client | CAL-05, CAL-06, INF-04 | Complete | 100% |
 | 4 - Calendar Query Services | CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08 | Complete | 100% |
-| 5 - Contact Query Services | CON-01, CON-02, CON-03, CON-04 | Pending | 0% |
+| 5 - Contact Query Services | CON-01, CON-02, CON-03, CON-04 | Complete | 100% |
 | 6 - MCP Integration & Testing | (validation) | Pending | 0% |
 
-**Overall:** 14/18 requirements complete (78%)
+**Overall:** 18/18 requirements complete (100%)
 
 ## Next Steps
 
-1. Plan Phase 5: Contact Query Services (CON-01, CON-02, CON-03, CON-04)
-2. Execute Phase 5
-3. Phase 6: MCP Integration & Testing (end-to-end validation)
+1. Phase 6: MCP Integration & Testing (end-to-end validation)
 
 ---
 
-*Last updated: 2026-01-27 after Phase 4 completion*
+*Last updated: 2026-01-27 after Phase 5 completion*
