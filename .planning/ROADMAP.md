@@ -64,13 +64,19 @@ Plans:
 5. Timezone information preserved and normalized to user's local timezone
 6. Recurring events (RRULE) expanded into individual occurrences with correct timestamps
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Install ical.js + DTO types + event transformer + timezone utils
+- [ ] 02-02-PLAN.md — vCard contact transformer + recurring event expansion
+
 **Notes:**
 - Uses ical.js for iCalendar/vCard parsing (zero dependencies, RFC 5545/6350 compliant)
 - Addresses critical pitfalls 2 & 3 (data loss from lossy mapping)
 - Addresses pitfall 6 (timezone handling) and 7 (vCard version compatibility)
 - Transformation layer can be tested independently from CalDAV protocol
 
-**Status:** Pending
+**Status:** Planned
 
 ---
 
@@ -203,7 +209,7 @@ Plans:
 | Phase | Requirements | Status | Completion |
 |-------|--------------|--------|------------|
 | 1 - Foundation & Configuration | INF-05, INF-06, INF-01, INF-02 | Complete | 100% |
-| 2 - Data Transformation | INF-03 | Pending | 0% |
+| 2 - Data Transformation | INF-03 | Planned | 0% |
 | 3 - CalDAV/CardDAV Client | CAL-05, CAL-06, INF-04 | Pending | 0% |
 | 4 - Calendar Query Services | CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08 | Pending | 0% |
 | 5 - Contact Query Services | CON-01, CON-02, CON-03, CON-04 | Pending | 0% |
@@ -213,12 +219,12 @@ Plans:
 
 ## Next Steps
 
-1. Begin Phase 2: Data Transformation
-2. Implement iCalendar parsing with ical.js (Event DTOs)
-3. Implement vCard parsing with ical.js (Contact DTOs)
-4. Preserve raw iCalendar/vCard data in _raw fields
-5. Handle timezone normalization and RRULE expansion
+1. Execute Phase 2: Data Transformation (2 plans, 2 waves)
+2. Plan 02-01: Install ical.js, define DTOs, implement event transformer + timezone utils
+3. Plan 02-02: Implement vCard contact transformer + recurring event expansion
+4. Verify Phase 2 completion (INF-03 requirement)
+5. Begin Phase 3: CalDAV/CardDAV Client Integration
 
 ---
 
-*Last updated: 2026-01-27 after Phase 1 completion*
+*Last updated: 2026-01-27 after Phase 2 planning*
