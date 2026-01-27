@@ -69,11 +69,34 @@ The server requires the following environment variables:
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `DAV_URL` | Yes | CalDAV/CardDAV server base URL (HTTPS required, except localhost) | `https://dav.linagora.com` |
-| `DAV_USERNAME` | Yes | Authentication username for the CalDAV/CardDAV server | `user@example.com` |
-| `DAV_PASSWORD` | Yes | Authentication password for the CalDAV/CardDAV server | `your-password` |
+| `DAV_AUTH_METHOD` | No | Authentication method: `basic` (default), `bearer`, or `esntoken` | `basic` |
+| `DAV_USERNAME` | For basic auth | Authentication username | `user@example.com` |
+| `DAV_PASSWORD` | For basic auth | Authentication password | `your-password` |
+| `DAV_TOKEN` | For bearer/esntoken | Authentication token (JWT or ESNToken) | `eyJhbG...` |
 | `LOG_LEVEL` | No | Log verbosity level (options: `fatal`, `error`, `warn`, `info`, `debug`, `trace`) | `info` (default) |
 
 **Security Note:** HTTPS is enforced to prevent credential exposure. Only `localhost` and `127.0.0.1` are allowed over HTTP for development purposes.
+
+### Authentication Methods
+
+**Basic Auth** (default) — Standard username/password authentication:
+```bash
+DAV_AUTH_METHOD=basic  # optional, this is the default
+DAV_USERNAME=user@example.com
+DAV_PASSWORD=your-password
+```
+
+**Bearer Token** — JWT Bearer token, sent as `Authorization: Bearer <token>`:
+```bash
+DAV_AUTH_METHOD=bearer
+DAV_TOKEN=eyJhbGciOiJSUzI1NiIs...
+```
+
+**ESNToken** — OpenPaaS/Twake session token, sent as `ESNToken: <token>`:
+```bash
+DAV_AUTH_METHOD=esntoken
+DAV_TOKEN=your-esn-session-token
+```
 
 ### Claude Desktop Configuration
 
@@ -84,7 +107,7 @@ To use mcp-twake with Claude Desktop, add the following to your Claude Desktop c
 - **Linux:** `~/.config/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
-**Configuration:**
+**Configuration (Basic Auth):**
 
 ```json
 {
@@ -96,6 +119,42 @@ To use mcp-twake with Claude Desktop, add the following to your Claude Desktop c
         "DAV_URL": "https://dav.example.com",
         "DAV_USERNAME": "user@example.com",
         "DAV_PASSWORD": "your-password"
+      }
+    }
+  }
+}
+```
+
+**Configuration (Bearer Token — e.g., OpenPaaS/Twake):**
+
+```json
+{
+  "mcpServers": {
+    "twake": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-twake/build/index.js"],
+      "env": {
+        "DAV_URL": "https://dav.linagora.com",
+        "DAV_AUTH_METHOD": "bearer",
+        "DAV_TOKEN": "your-jwt-token"
+      }
+    }
+  }
+}
+```
+
+**Configuration (ESNToken — legacy OpenPaaS):**
+
+```json
+{
+  "mcpServers": {
+    "twake": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-twake/build/index.js"],
+      "env": {
+        "DAV_URL": "https://dav.linagora.com",
+        "DAV_AUTH_METHOD": "esntoken",
+        "DAV_TOKEN": "your-esn-token"
       }
     }
   }
@@ -146,12 +205,12 @@ Once configured, you can ask Claude natural language questions about your calend
 ### Common Issues and Solutions
 
 **1. "Configuration validation failed" / Missing environment variables**
-- **Problem:** One or more required environment variables (DAV_URL, DAV_USERNAME, DAV_PASSWORD) are not set
-- **Solution:** Check your Claude Desktop config file and ensure all required environment variables are defined in the `env` section
+- **Problem:** Required environment variables are missing for the selected auth method
+- **Solution:** For basic auth (default): set `DAV_URL`, `DAV_USERNAME`, `DAV_PASSWORD`. For bearer/esntoken auth: set `DAV_URL`, `DAV_AUTH_METHOD`, `DAV_TOKEN`
 
 **2. "Authentication failed" / 401 Unauthorized**
-- **Problem:** Wrong username or password
-- **Solution:** Verify your DAV_USERNAME and DAV_PASSWORD are correct. Test by logging into your CalDAV/CardDAV server's web interface with the same credentials
+- **Problem:** Invalid credentials or token
+- **Solution:** For basic auth: verify DAV_USERNAME and DAV_PASSWORD. For bearer/esntoken: verify DAV_TOKEN is valid and not expired. You can also try a different auth method with `DAV_AUTH_METHOD`
 
 **3. "Cannot find server" / DNS resolution error**
 - **Problem:** The DAV_URL hostname cannot be resolved
@@ -211,7 +270,7 @@ mcp-twake is built with a layered architecture:
 
 1. **Configuration Layer** - Zod-based environment variable validation with fail-fast behavior and HTTPS enforcement
 2. **Logging Layer** - Pino logger configured for stderr output (prevents stdout contamination in MCP stdio transport)
-3. **CalDAV/CardDAV Client Layer** - Dual tsdav clients for CalDAV and CardDAV with discovery, authentication, and connection validation
+3. **CalDAV/CardDAV Client Layer** - Dual tsdav clients for CalDAV and CardDAV with discovery, multi-method authentication (Basic, Bearer, ESNToken), and connection validation
 4. **Infrastructure Layer** - Retry logic with exponential backoff and jitter, CTag-based caching for performance optimization
 5. **Service Layer** - CalendarService and AddressBookService with resource fetching and caching management
 6. **Transformation Layer** - iCal.js-based parsing of iCalendar and vCard formats, timezone normalization, RRULE expansion

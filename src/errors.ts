@@ -27,8 +27,10 @@ export function formatStartupError(error: Error, url?: string): string {
       'Configuration validation failed:',
       ...issues,
       '',
-      'Fix: Check your environment variables (DAV_URL, DAV_USERNAME, DAV_PASSWORD).',
-      'Example: DAV_URL=https://dav.example.com DAV_USERNAME=user DAV_PASSWORD=pass',
+      'Fix: Check your environment variables.',
+      'For basic auth (default): DAV_URL, DAV_USERNAME, DAV_PASSWORD',
+      'For bearer auth: DAV_URL, DAV_AUTH_METHOD=bearer, DAV_TOKEN',
+      'For esntoken auth: DAV_URL, DAV_AUTH_METHOD=esntoken, DAV_TOKEN',
     ].join('\n');
   }
 
@@ -44,8 +46,10 @@ export function formatStartupError(error: Error, url?: string): string {
     return [
       'Authentication failed for the configured CalDAV server.',
       '',
-      'Fix: Verify DAV_USERNAME and DAV_PASSWORD are correct.',
-      'Check that your credentials have access to the CalDAV/CardDAV service.',
+      'Fix: Verify your credentials are correct.',
+      'If using basic auth: check DAV_USERNAME and DAV_PASSWORD.',
+      'If using bearer/esntoken: check DAV_TOKEN is valid and not expired.',
+      'You can switch auth methods with DAV_AUTH_METHOD (basic, bearer, esntoken).',
     ].join('\n');
   }
 
@@ -104,6 +108,6 @@ export function formatStartupError(error: Error, url?: string): string {
     `Unexpected error: ${errorMessage}`,
     '',
     'Fix: Check your configuration and try again.',
-    'Verify DAV_URL, DAV_USERNAME, and DAV_PASSWORD are set correctly.',
+    'Verify DAV_URL and your auth settings (DAV_USERNAME/DAV_PASSWORD or DAV_AUTH_METHOD/DAV_TOKEN).',
   ].join('\n');
 }

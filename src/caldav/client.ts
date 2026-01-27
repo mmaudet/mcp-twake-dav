@@ -3,6 +3,11 @@
  *
  * Purpose: Abstract tsdav client initialization and provide connection
  * validation with timeout protection for startup flow.
+ *
+ * Supports three auth methods via DAV_AUTH_METHOD:
+ * - basic: Standard Basic Auth (username/password)
+ * - bearer: JWT Bearer token (Authorization: Bearer <token>)
+ * - esntoken: OpenPaaS ESNToken header (ESNToken: <token>)
  */
 
 import { createDAVClient } from 'tsdav';
@@ -24,37 +29,64 @@ export interface DualClients {
 }
 
 /**
- * Create a CalDAV client configured with Basic Auth
+ * Build tsdav auth configuration from app config.
  *
- * @param config - Validated configuration with DAV_URL, DAV_USERNAME, DAV_PASSWORD
+ * All methods use authMethod 'Custom' with authFunction to inject headers.
+ * This works around a tsdav bug where the built-in 'Basic' mode loses the
+ * Authorization header on 301 redirects (e.g., .well-known/caldav → /calendars).
+ *
+ * - basic: Authorization: Basic <base64(user:pass)>
+ * - bearer: Authorization: Bearer <token>
+ * - esntoken: ESNToken: <token>
+ */
+function getAuthConfig(config: Config) {
+  if (config.DAV_AUTH_METHOD === 'bearer') {
+    return {
+      authMethod: 'Custom' as const,
+      credentials: { username: '', password: '' },
+      authFunction: async () => ({ authorization: `Bearer ${config.DAV_TOKEN}` }),
+    };
+  }
+  if (config.DAV_AUTH_METHOD === 'esntoken') {
+    return {
+      authMethod: 'Custom' as const,
+      credentials: { username: '', password: '' },
+      authFunction: async () => ({ ESNToken: config.DAV_TOKEN! }),
+    };
+  }
+  // Basic auth: use Custom mode to survive 301 redirects
+  const basicToken = Buffer.from(`${config.DAV_USERNAME}:${config.DAV_PASSWORD}`).toString('base64');
+  return {
+    authMethod: 'Custom' as const,
+    credentials: { username: '', password: '' },
+    authFunction: async () => ({ authorization: `Basic ${basicToken}` }),
+  };
+}
+
+/**
+ * Create a CalDAV client configured with the selected auth method
+ *
+ * @param config - Validated configuration
  * @returns Configured CalDAV client
  */
 export function createCalDAVClient(config: Config): Promise<DAVClientType> {
   return createDAVClient({
     serverUrl: config.DAV_URL,
-    credentials: {
-      username: config.DAV_USERNAME,
-      password: config.DAV_PASSWORD,
-    },
-    authMethod: 'Basic',
+    ...getAuthConfig(config),
     defaultAccountType: 'caldav',
   });
 }
 
 /**
- * Create a CardDAV client configured with Basic Auth
+ * Create a CardDAV client configured with the selected auth method
  *
- * @param config - Validated configuration with DAV_URL, DAV_USERNAME, DAV_PASSWORD
+ * @param config - Validated configuration
  * @returns Configured CardDAV client
  */
 export function createCardDAVClient(config: Config): Promise<DAVClientType> {
   return createDAVClient({
     serverUrl: config.DAV_URL,
-    credentials: {
-      username: config.DAV_USERNAME,
-      password: config.DAV_PASSWORD,
-    },
-    authMethod: 'Basic',
+    ...getAuthConfig(config),
     defaultAccountType: 'carddav',
   });
 }
