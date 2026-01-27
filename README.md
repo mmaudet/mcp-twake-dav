@@ -78,35 +78,35 @@ npm run build
 
 ### Environment Variables
 
-The server requires the following environment variables:
+#### Basic Auth (default)
+
+Standard username/password authentication. `DAV_AUTH_METHOD` can be omitted (defaults to `basic`).
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `DAV_URL` | Yes | CalDAV/CardDAV server base URL (HTTPS required, except localhost) | `https://dav.example.com` |
-| `DAV_AUTH_METHOD` | No | Authentication method: `basic` (default) or `bearer` | `basic` |
-| `DAV_USERNAME` | For basic auth | Authentication username | `user@example.com` |
-| `DAV_PASSWORD` | For basic auth | Authentication password | `your-password` |
-| `DAV_TOKEN` | For bearer auth | JWT Bearer token | `eyJhbG...` |
-| `DAV_DEFAULT_CALENDAR` | No | Default calendar name to query (omit to query all) | `My Calendar` |
-| `DAV_DEFAULT_ADDRESSBOOK` | No | Default address book name to query (omit to query all) | `My Contacts` |
-| `LOG_LEVEL` | No | Log verbosity level: `fatal`, `error`, `warn`, `info`, `debug`, `trace` | `info` (default) |
+| `DAV_URL` | Yes | CalDAV/CardDAV server base URL (HTTPS required) | `https://dav.example.com` |
+| `DAV_USERNAME` | Yes | Authentication username | `user@example.com` |
+| `DAV_PASSWORD` | Yes | Authentication password | `your-password` |
+
+#### Bearer Token
+
+JWT Bearer token, sent as `Authorization: Bearer <token>`.
+
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `DAV_URL` | Yes | CalDAV/CardDAV server base URL (HTTPS required) | `https://dav.example.com` |
+| `DAV_AUTH_METHOD` | Yes | Must be set to `bearer` | `bearer` |
+| `DAV_TOKEN` | Yes | JWT Bearer token | `eyJhbGciOiJSUzI1NiIs...` |
+
+#### Optional
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DAV_DEFAULT_CALENDAR` | Default calendar name to query (omit to query all) | `My Calendar` |
+| `DAV_DEFAULT_ADDRESSBOOK` | Default address book name to query (omit to query all) | `My Contacts` |
+| `LOG_LEVEL` | Log verbosity: `fatal`, `error`, `warn`, `info`, `debug`, `trace` | `info` (default) |
 
 **Security Note:** HTTPS is enforced to prevent credential exposure. Only `localhost` and `127.0.0.1` are allowed over HTTP for development purposes.
-
-### Authentication Methods
-
-**Basic Auth** (default) — Standard username/password authentication:
-```bash
-DAV_AUTH_METHOD=basic  # optional, this is the default
-DAV_USERNAME=user@example.com
-DAV_PASSWORD=your-password
-```
-
-**Bearer Token** — JWT Bearer token, sent as `Authorization: Bearer <token>`:
-```bash
-DAV_AUTH_METHOD=bearer
-DAV_TOKEN=eyJhbGciOiJSUzI1NiIs...
-```
 
 ### Claude Desktop Configuration
 
