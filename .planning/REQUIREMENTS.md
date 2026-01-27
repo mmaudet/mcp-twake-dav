@@ -28,12 +28,12 @@
 
 ### Infrastructure
 
-- [ ] **INF-01**: Server authenticates to CalDAV/CardDAV via basic auth (env vars)
-- [ ] **INF-02**: Errors return AI-friendly messages the LLM can relay to users
+- [x] **INF-01**: Server authenticates to CalDAV/CardDAV via basic auth (env vars)
+- [x] **INF-02**: Errors return AI-friendly messages the LLM can relay to users
 - [ ] **INF-03**: Raw iCalendar/vCard data preserved alongside parsed fields
 - [ ] **INF-04**: ETag/CTag-based caching for performance
-- [ ] **INF-05**: Server runs over stdio transport (MCP SDK)
-- [ ] **INF-06**: Configuration via environment variables (CALDAV_URL, CALDAV_USERNAME, CALDAV_PASSWORD)
+- [x] **INF-05**: Server runs over stdio transport (MCP SDK)
+- [x] **INF-06**: Configuration via environment variables (CALDAV_URL, CALDAV_USERNAME, CALDAV_PASSWORD)
 
 ## v2 Requirements
 
@@ -91,12 +91,12 @@
 | CON-02 | Phase 5 | Pending |
 | CON-03 | Phase 5 | Pending |
 | CON-04 | Phase 5 | Pending |
-| INF-01 | Phase 1 | Pending |
-| INF-02 | Phase 1 | Pending |
+| INF-01 | Phase 1 | Complete |
+| INF-02 | Phase 1 | Complete |
 | INF-03 | Phase 2 | Pending |
 | INF-04 | Phase 3 | Pending |
-| INF-05 | Phase 1 | Pending |
-| INF-06 | Phase 1 | Pending |
+| INF-05 | Phase 1 | Complete |
+| INF-06 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 18 total
@@ -105,4 +105,4 @@
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 after roadmap creation*
+*Last updated: 2026-01-27 after Phase 1 completion*

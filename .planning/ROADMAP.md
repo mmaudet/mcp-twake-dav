@@ -35,15 +35,15 @@ Phases progress from infrastructure to user-facing features, with each phase del
 **Plans:** 2 plans
 
 Plans:
-- [ ] 01-PLAN-01.md — Project scaffolding + configuration validation + stderr logger
-- [ ] 01-PLAN-02.md — CalDAV client wrapper + AI-friendly errors + MCP stdio entry point
+- [x] 01-PLAN-01.md — Project scaffolding + configuration validation + stderr logger
+- [x] 01-PLAN-02.md — CalDAV client wrapper + AI-friendly errors + MCP stdio entry point
 
 **Notes:**
 - Addresses critical pitfall 1 (stdout contamination) and 5 (HTTP security)
 - Establishes Pino logger configured with destination: stderr
 - Zod schemas validate all configuration at startup (fail-fast)
 
-**Status:** Planned
+**Status:** Complete
 
 ---
 
@@ -202,23 +202,23 @@ Plans:
 
 | Phase | Requirements | Status | Completion |
 |-------|--------------|--------|------------|
-| 1 - Foundation & Configuration | INF-05, INF-06, INF-01, INF-02 | Pending | 0% |
+| 1 - Foundation & Configuration | INF-05, INF-06, INF-01, INF-02 | Complete | 100% |
 | 2 - Data Transformation | INF-03 | Pending | 0% |
 | 3 - CalDAV/CardDAV Client | CAL-05, CAL-06, INF-04 | Pending | 0% |
 | 4 - Calendar Query Services | CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08 | Pending | 0% |
 | 5 - Contact Query Services | CON-01, CON-02, CON-03, CON-04 | Pending | 0% |
 | 6 - MCP Integration & Testing | (validation) | Pending | 0% |
 
-**Overall:** 0/18 requirements complete (0%)
+**Overall:** 4/18 requirements complete (22%)
 
 ## Next Steps
 
-1. Begin Phase 1: Foundation & Configuration
-2. Set up TypeScript project with MCP SDK, Zod, Pino
-3. Implement environment variable validation (HTTPS enforcement)
-4. Configure stderr-only logging (prevent stdout contamination)
-5. Validate CalDAV/CardDAV connection with Basic Auth
+1. Begin Phase 2: Data Transformation
+2. Implement iCalendar parsing with ical.js (Event DTOs)
+3. Implement vCard parsing with ical.js (Contact DTOs)
+4. Preserve raw iCalendar/vCard data in _raw fields
+5. Handle timezone normalization and RRULE expansion
 
 ---
 
-*Last updated: 2026-01-27 after roadmap creation*
+*Last updated: 2026-01-27 after Phase 1 completion*
