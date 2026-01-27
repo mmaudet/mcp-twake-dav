@@ -306,7 +306,10 @@ END:VCARD`;
       // Photo preserved
       const photo = vcard.getFirstProperty('photo');
       expect(photo).not.toBeNull();
-      expect(photo.getFirstValue()).toContain('/9j/4AAQSkZJRgABAQEASABIAAD');
+      // PHOTO value might be array or string depending on ical.js version
+      const photoValue = photo.getFirstValue();
+      const photoStr = Array.isArray(photoValue) ? photoValue.join('') : String(photoValue);
+      expect(photoStr).toContain('/9j/4AAQSkZJRgABAQEASABIAAD');
     });
 
     it('should preserve grouped properties (item1.EMAIL, item1.X-ABLabel)', () => {
@@ -314,10 +317,12 @@ END:VCARD`;
       const result = updateVCardString(vCardWithGroups, changes);
 
       // Raw string should still contain grouped properties
-      expect(result).toContain('item1.EMAIL');
-      expect(result).toContain('item1.X-ABLabel');
-      expect(result).toContain('item2.EMAIL');
-      expect(result).toContain('item2.X-ABLabel');
+      // ical.js uppercases property names in toString(), so check case-insensitively
+      const resultUpper = result.toUpperCase();
+      expect(resultUpper).toContain('ITEM1.EMAIL');
+      expect(resultUpper).toContain('ITEM1.X-ABLABEL');
+      expect(resultUpper).toContain('ITEM2.EMAIL');
+      expect(resultUpper).toContain('ITEM2.X-ABLABEL');
 
       const jCalData = ICAL.parse(result);
       const vcard = new ICAL.Component(jCalData);
