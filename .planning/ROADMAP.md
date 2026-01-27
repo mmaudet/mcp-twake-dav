@@ -100,6 +100,15 @@ Plans:
 6. ETags cached and used for conditional requests (If-None-Match header)
 7. Connection errors handled with retry logic (exponential backoff, 3 attempts)
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Retry utility + cache types + CTag-based collection cache
+- [ ] 03-02-PLAN.md — Dual-client factory (CalDAV + CardDAV) + discovery service
+- [ ] 03-03-PLAN.md — Calendar service (list, fetch, multi-calendar aggregation with cache + retry)
+- [ ] 03-04-PLAN.md — Address book service (list, fetch, multi-addressbook aggregation with cache + retry)
+- [ ] 03-05-PLAN.md — Wire dual clients and services into startup flow (index.ts)
+
 **Notes:**
 - CRITICAL PATH: If tsdav doesn't work with SabreDAV, may need architecture changes
 - Uses tsdav 2.1.6+ for CalDAV/CardDAV operations
@@ -107,7 +116,7 @@ Plans:
 - Early prototype against real SabreDAV server recommended
 - Research flag: HIGH (compatibility validation required)
 
-**Status:** Pending
+**Status:** Planned
 
 ---
 
@@ -210,7 +219,7 @@ Plans:
 |-------|--------------|--------|------------|
 | 1 - Foundation & Configuration | INF-05, INF-06, INF-01, INF-02 | Complete | 100% |
 | 2 - Data Transformation | INF-03 | Complete | 100% |
-| 3 - CalDAV/CardDAV Client | CAL-05, CAL-06, INF-04 | Pending | 0% |
+| 3 - CalDAV/CardDAV Client | CAL-05, CAL-06, INF-04 | Planned | 0% |
 | 4 - Calendar Query Services | CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08 | Pending | 0% |
 | 5 - Contact Query Services | CON-01, CON-02, CON-03, CON-04 | Pending | 0% |
 | 6 - MCP Integration & Testing | (validation) | Pending | 0% |
@@ -219,12 +228,12 @@ Plans:
 
 ## Next Steps
 
-1. Begin Phase 3: CalDAV/CardDAV Client Integration (CRITICAL PATH)
-2. Plan 03-01: Implement CalDAV client with calendar/addressbook discovery
-3. Plan 03-02: Implement event/contact fetching with ETag caching
-4. Plan 03-03: Test integration against real SabreDAV server (dav.linagora.com)
+1. Execute Phase 3: CalDAV/CardDAV Client Integration (CRITICAL PATH)
+2. Wave 1: Plans 03-01 (retry + cache) and 03-02 (dual-client + discovery) in parallel
+3. Wave 2: Plans 03-03 (calendar service) and 03-04 (addressbook service) in parallel
+4. Wave 3: Plan 03-05 (wire into index.ts)
 5. Verify Phase 3 completion (CAL-05, CAL-06, INF-04 requirements)
 
 ---
 
-*Last updated: 2026-01-27 after Phase 2 completion*
+*Last updated: 2026-01-27 after Phase 3 planning*
