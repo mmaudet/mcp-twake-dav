@@ -55,11 +55,10 @@ async function main() {
       version: '0.1.0',
     });
 
-    // Register calendar query tools (Phase 4: CAL-01 through CAL-08)
-    registerAllTools(server, calendarService, logger);
-    logger.info('Calendar tools registered');
+    // Register calendar and contact query tools (Phase 4 + Phase 5)
+    registerAllTools(server, calendarService, addressBookService, logger);
+    logger.info('Calendar and contact tools registered');
 
-    // TODO (Phase 5): Register contact query tools using addressBookService
     logger.info('MCP server initialized');
 
     // Step 7: Connect stdio transport
