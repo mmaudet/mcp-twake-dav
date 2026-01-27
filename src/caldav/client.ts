@@ -8,6 +8,7 @@
 import { createDAVClient } from 'tsdav';
 import type { Config } from '../config/schema.js';
 import type { Logger } from '../config/logger.js';
+import { discoverCalendars, discoverAddressBooks } from './discovery.js';
 
 /**
  * Type for the DAV client returned by tsdav
@@ -114,6 +115,58 @@ export async function validateConnection(config: Config, logger: Logger): Promis
     );
 
     return client;
+  } catch (error) {
+    // Let the error bubble up to be handled by formatStartupError
+    throw error;
+  }
+}
+
+/**
+ * Validate connection to both CalDAV and CardDAV servers
+ *
+ * Tests connection by discovering calendars and address books in parallel
+ * with a 15-second timeout (longer than single-client validation because
+ * we're doing two discoveries).
+ *
+ * @param clients - Dual clients object with both CalDAV and CardDAV clients
+ * @param config - Validated configuration
+ * @param logger - Logger instance for info/error messages
+ * @returns Object with calendarCount and addressBookCount
+ * @throws Error if connection fails or times out
+ */
+export async function validateDualConnection(
+  clients: DualClients,
+  config: Config,
+  logger: Logger
+): Promise<{ calendarCount: number; addressBookCount: number }> {
+  logger.info({ url: config.DAV_URL }, 'Validating CalDAV and CardDAV connections...');
+
+  // Create a 15-second timeout promise (longer than Phase 1's 10s because we're doing 2 discoveries)
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error('Connection timeout after 15 seconds'));
+    }, 15000);
+  });
+
+  try {
+    // Discover calendars and address books in parallel, with timeout
+    const [calendars, addressBooks] = await Promise.race([
+      Promise.all([
+        discoverCalendars(clients.caldav, logger),
+        discoverAddressBooks(clients.carddav, logger),
+      ]),
+      timeoutPromise,
+    ]) as [any[], any[]];
+
+    const calendarCount = calendars.length;
+    const addressBookCount = addressBooks.length;
+
+    logger.info(
+      { calendarCount, addressBookCount, url: config.DAV_URL },
+      'CalDAV/CardDAV connection validated successfully'
+    );
+
+    return { calendarCount, addressBookCount };
   } catch (error) {
     // Let the error bubble up to be handled by formatStartupError
     throw error;
