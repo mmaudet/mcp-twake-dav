@@ -2,27 +2,27 @@
 
 **Last Updated:** 2026-01-27
 **Current Phase:** 5 of 6 - Contact Query Services
-**Current Plan:** 1 of 2 (In Progress)
+**Current Plan:** 2 of 2 (Complete)
 
 ## Project Reference
 
 **Core Value:** Users can ask an AI assistant questions about their CalDAV calendars and CardDAV contacts and get accurate answers from their own sovereign infrastructure.
 
-**Current Focus:** Phase 5 - Contact Query Services
+**Current Focus:** Phase 5 - Contact Query Services (COMPLETE)
 
 ## Current Position
 
 **Phase:** 5 of 6 - Contact Query Services
 
-**Plan:** 1 of 2 (In Progress)
+**Plan:** 2 of 2 (Complete)
 
-**Status:** In progress
+**Status:** Phase complete
 
-**Last activity:** 2026-01-27 - Completed 05-01-PLAN.md
+**Last activity:** 2026-01-27 - Completed 05-02-PLAN.md
 
 **Progress:**
 ```
-[███████████████░░░░░] 83% (15/18 requirements)
+[███████████████████░] 100% (18/18 requirements)
 ```
 
 **Milestone:** v1 - Read-only CalDAV/CardDAV MCP Server
@@ -36,15 +36,15 @@
 - Phase 2: 1/1 requirements ✓ COMPLETE
 - Phase 3: 3/3 requirements ✓ COMPLETE
 - Phase 4: 6/6 requirements ✓ COMPLETE (CAL-01 through CAL-08)
-- Phase 5: 0/4 requirements
+- Phase 5: 4/4 requirements ✓ COMPLETE (CON-01 through CON-04)
 - Phase 6: 0/0 requirements (validation)
 
 **Recent Completions:**
+- 2026-01-27: 05-02 - Contact MCP Tools + Entry Point Wiring (1 minute, 2 tasks) ✓ PHASE 5 COMPLETE
 - 2026-01-27: 05-01 - Contact Query Services Utilities (2 minutes, 2 tasks)
 - 2026-01-27: 04-02 - Calendar MCP Tools (2.1 minutes, 2 tasks) ✓ PHASE 4 COMPLETE
 - 2026-01-27: 04-01 - Shared Calendar Query Utilities (~2 minutes, 2 tasks)
 - 2026-01-27: 03-05 - Startup Wiring (2 minutes, 2 tasks) ✓ PHASE 3 COMPLETE
-- 2026-01-27: 03-04 - AddressBook Service (2 minutes, 1 task)
 
 ## Accumulated Context
 
@@ -96,6 +96,9 @@
 | Case-insensitive contact search across multiple name fields | Users enter partial names expecting matches; searches formatted/given/family names per RFC 6352 | 5 | 2026-01-27 |
 | LLM-optimized contact formatting (no _raw/etag/uid) | Omitting internal metadata reduces token usage 5-10x, mirrors Phase 4 event formatting | 5 | 2026-01-27 |
 | Shared utils module for Phase 5 tools | DRY principle - all contact tools share search, formatting, fetch+transform logic | 5 | 2026-01-27 |
+| list_addressbooks tool inline | Follows Phase 4's list_calendars pattern (simple tool, no file proliferation) | 5 | 2026-01-27 |
+| 30-contact truncation limit for list_contacts | Prevents output overflow, matches Phase 4's 50-event limit philosophy | 5 | 2026-01-27 |
+| Intersection filter logic for dual search | When both name and organization provided, contacts must match both (narrowing search) | 5 | 2026-01-27 |
 
 ### Active TODOs
 
@@ -165,15 +168,14 @@ None currently.
 
 ## Session Continuity
 
-**Last Session:** 2026-01-27 - Completed 05-01-PLAN.md
+**Last Session:** 2026-01-27 - Completed 05-02-PLAN.md
 
-**Stopped at:** Completed 05-01-PLAN.md
+**Stopped at:** Completed 05-02-PLAN.md
 
 **Resume file:** None
 
 **Next Session Should:**
-1. Execute Phase 5 (Contact Query Services) — 2 plans, 2 waves
-2. Plan and execute Phase 6 (Integration Testing)
+1. Plan and execute Phase 6 (Integration Testing) — FINAL PHASE
 
 **Context for Next Developer:**
 - This is a TypeScript MCP server for CalDAV/CardDAV (read-only v1)
@@ -182,11 +184,13 @@ None currently.
 - ✓ Phase 2 COMPLETE: EventDTO/ContactDTO types, event/contact transformers, timezone registration, RRULE expansion
 - ✓ Phase 3 COMPLETE: Dual tsdav clients, discovery, calendar/addressbook services, cache, retry, startup wiring
 - ✓ Phase 4 COMPLETE: 5 MCP calendar tools (get_next_event, get_todays_schedule, get_events_in_range, search_events, list_calendars), tool registration aggregator, wired into src/index.ts
+- ✓ Phase 5 COMPLETE: 4 MCP contact tools (search_contacts, get_contact_details, list_contacts, list_addressbooks), dual-filter search, LLM-optimized formatting
 - Server creates dual CalDAV/CardDAV clients at startup
 - CalendarService and AddressBookService initialized and available
 - CTag-based caching and retry infrastructure operational
 - MCP tools registered before server.connect() for discoverability
-- Tool pattern established: Zod schemas, try/catch, formatEvent/formatEventTime utilities
+- Tool pattern established: Zod schemas, try/catch, formatEvent/formatContact utilities
+- 9 total MCP tools operational: 5 calendar + 4 contact
 
 **Open Questions:**
 - Will tsdav work with SabreDAV? (to be tested during Phase 6 integration testing)
