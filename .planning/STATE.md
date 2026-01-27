@@ -1,223 +1,49 @@
 # State: mcp-twake
 
 **Last Updated:** 2026-01-27
-**Current Phase:** 6 of 6 - MCP Integration & Testing
-**Current Plan:** 0 of 3 (Planned)
+**Milestone:** v1 - COMPLETE
+**Status:** Milestone archived
 
-## Project Reference
+## Milestone Summary
 
-**Core Value:** Users can ask an AI assistant questions about their CalDAV calendars and CardDAV contacts and get accurate answers from their own sovereign infrastructure.
+**v1 - Read-only CalDAV/CardDAV MCP Server**
 
-**Current Focus:** Phase 6 - MCP Integration & Testing
+- **Requirements:** 18/18 complete (100%)
+- **Phases:** 6/6 complete
+- **Tests:** 13/13 passing (2 test files)
+- **npm:** Published as mcp-twake@0.1.1
+- **Audit:** PASS (2026-01-27)
 
-## Current Position
+## What Was Delivered
 
-**Phase:** 6 of 6 - MCP Integration & Testing
+### Core (18 requirements)
+- 9 MCP tools (5 calendar + 4 contact)
+- CalDAV/CardDAV integration via tsdav
+- CTag-based caching, retry with exponential backoff
+- iCalendar/vCard parsing via ical.js
+- Natural language date parsing via chrono-node
+- AI-friendly error messages
+- HTTPS enforcement
+- stdio transport for Claude Desktop/CLI
 
-**Plan:** 1 of 3 (In progress)
+### Bonus (post-roadmap)
+- Multi-auth: Basic, Bearer token, ESNToken
+- Calendar filtering: `calendar` param + `DAV_DEFAULT_CALENDAR`
+- Address book filtering: `addressbook` param + `DAV_DEFAULT_ADDRESSBOOK`
+- npm package with `npx mcp-twake` support
+- Community standards: CONTRIBUTING.md, issue templates, PR template, badges
 
-**Status:** In progress
+## Archive
 
-**Last activity:** 2026-01-27 - Completed 06-01-PLAN.md
+All v1 planning files archived to `.planning/archive/v1/`
 
-**Progress:**
-```
-[████████████████████] 100% (18/18 requirements)
-```
+## Next Milestone
 
-**Milestone:** v1 - Read-only CalDAV/CardDAV MCP Server
-
-## Performance Metrics
-
-**Velocity:** 2.9 minutes per plan (average of recent plans)
-
-**Phase Stats:**
-- Phase 1: 4/4 requirements ✓ COMPLETE
-- Phase 2: 1/1 requirements ✓ COMPLETE
-- Phase 3: 3/3 requirements ✓ COMPLETE
-- Phase 4: 6/6 requirements ✓ COMPLETE (CAL-01 through CAL-08)
-- Phase 5: 4/4 requirements ✓ COMPLETE (CON-01 through CON-04)
-- Phase 6: 0/0 requirements (validation)
-
-**Recent Completions:**
-- 2026-01-27: 06-01 - MCP Integration Testing Setup (3 minutes, 2 tasks)
-- 2026-01-27: 05-02 - Contact MCP Tools + Entry Point Wiring (1 minute, 2 tasks) ✓ PHASE 5 COMPLETE
-- 2026-01-27: 05-01 - Contact Query Services Utilities (2 minutes, 2 tasks)
-- 2026-01-27: 04-02 - Calendar MCP Tools (2.1 minutes, 2 tasks) ✓ PHASE 4 COMPLETE
-- 2026-01-27: 04-01 - Shared Calendar Query Utilities (~2 minutes, 2 tasks)
-
-## Accumulated Context
-
-### Active Decisions
-
-| Decision | Rationale | Phase | Date |
-|----------|-----------|-------|------|
-| TypeScript over Python | Aligns with MCP SDK reference implementation | 1 | 2026-01-27 |
-| stdio transport only | Covers Claude Desktop/CLI, simplest to implement | 1 | 2026-01-27 |
-| Basic auth | SabreDAV standard, sufficient for v1 | 1 | 2026-01-27 |
-| Read-only v1 | Lower risk, faster to ship, write in v2 | All | 2026-01-27 |
-| AGPL-3.0 license | LINAGORA standard, ensures modifications shared | All | 2026-01-27 |
-| Pino for logging | 5x faster than Winston, stderr support critical | 1 | 2026-01-27 |
-| tsdav for CalDAV/CardDAV | 35k+ weekly downloads, TypeScript-native | 3 | 2026-01-27 |
-| ical.js for parsing | Zero dependencies, RFC 5545/6350 compliant | 2 | 2026-01-27 |
-| ESM modules with .js extensions | MCP SDK requires ESM with .js import extensions | 1 | 2026-01-27 |
-| Zod fail-fast validation | Catch config errors at startup, not runtime | 1 | 2026-01-27 |
-| HTTPS enforcement + localhost | Prevent credential exposure, allow local dev | 1 | 2026-01-27 |
-| pino.destination(2) for stderr | Explicit stderr routing prevents stdout contamination | 1 | 2026-01-27 |
-| AI-friendly error formatting | "What went wrong" + "How to fix it" pattern helps Claude diagnose issues | 1 | 2026-01-27 |
-| 10-second connection timeout | Prevents indefinite hangs on unreachable servers during startup | 1 | 2026-01-27 |
-| Startup connection validation | Test CalDAV before MCP server start for fail-fast behavior | 1 | 2026-01-27 |
-| Register timezones before parsing | Prevents DST-related time conversion errors | 2 | 2026-01-27 |
-| Graceful parse error handling | Return null on failure, log context, never throw | 2 | 2026-01-27 |
-| Attendee CN over email | Better UX when CN parameter available | 2 | 2026-01-27 |
-| vCard 3.0 as default | When VERSION missing, default to 3.0 (more common format) | 2 | 2026-01-27 |
-| maxOccurrences=100 for RRULE | Prevents runaway expansion on unbounded recurrence rules | 2 | 2026-01-27 |
-| startDate filter doesn't count toward max | Allows fetching future occurrences without past occurrences consuming limit | 2 | 2026-01-27 |
-| Dual tsdav clients (CalDAV + CardDAV) | tsdav routes discovery via defaultAccountType; separate clients needed | 3 | 2026-01-27 |
-| CTag-based cache with isCollectionDirty | tsdav provides built-in CTag comparison; avoids unnecessary re-fetches | 3 | 2026-01-27 |
-| Hand-rolled retry with exponential backoff | ~20 lines; no need for npm dependency | 3 | 2026-01-27 |
-| Services return raw DAV objects (not DTOs) | Transformation deferred to Phase 4/5 query layers | 3 | 2026-01-27 |
-| MultiGet fallback for address books | Some servers lack addressbook-multiget; retry with useMultiGet=false | 3 | 2026-01-27 |
-| 15-second dual validation timeout | Longer than Phase 1's 10s because two parallel discoveries | 3 | 2026-01-27 |
-| Passive cache design | Cache doesn't call tsdav; services call isCollectionDirty then use cache | 3 | 2026-01-27 |
-| Logger from pino (type-only) in infra | Matches transformer pattern; not config/logger.js | 3 | 2026-01-27 |
-| Jitter enabled by default in retry | Prevents thundering herd on simultaneous retries | 3 | 2026-01-27 |
-| Services instantiated at startup (not tool registration) | CalendarService and AddressBookService ready before Phase 4/5 tool registration | 3 | 2026-01-27 |
-| Preserved validateConnection alongside validateDualConnection | Single-protocol validation still useful for testing/debugging | 3 | 2026-01-27 |
-| chrono-node for natural language date parsing | Mature library (v2.9.0) with TypeScript definitions, handles 'tomorrow', 'next week', date ranges | 4 | 2026-01-27 |
-| LLM-optimized event formatting (no _raw/etag) | Reduces token usage, improves readability for Claude, keeps only human-relevant fields | 4 | 2026-01-27 |
-| 50-event truncation in getEventsWithRecurrenceExpansion | Prevents runaway expansion, protects against unbounded recurring events | 4 | 2026-01-27 |
-| Case-insensitive search by default | Better UX - users shouldn't need exact case matching for keywords/attendees | 4 | 2026-01-27 |
-| Shared utils module for Phase 4 tools | DRY principle - all calendar tools share date parsing, formatting, filtering logic | 4 | 2026-01-27 |
-| MCP tools registered before server.connect() | MCP protocol requires tool registration before transport connection for discoverability | 4 | 2026-01-27 |
-| Calendar filter deferred to v2 | DAVCalendarObject doesn't carry calendar name; requires service layer changes | 4 | 2026-01-27 |
-| list_calendars tool inline in aggregator | Simple tool (single service call), avoid file proliferation | 4 | 2026-01-27 |
-| 30-day default for search_events | Balances performance (bounded query) with UX (typical upcoming meetings use case) | 4 | 2026-01-27 |
-| Case-insensitive contact search across multiple name fields | Users enter partial names expecting matches; searches formatted/given/family names per RFC 6352 | 5 | 2026-01-27 |
-| LLM-optimized contact formatting (no _raw/etag/uid) | Omitting internal metadata reduces token usage 5-10x, mirrors Phase 4 event formatting | 5 | 2026-01-27 |
-| Shared utils module for Phase 5 tools | DRY principle - all contact tools share search, formatting, fetch+transform logic | 5 | 2026-01-27 |
-| list_addressbooks tool inline | Follows Phase 4's list_calendars pattern (simple tool, no file proliferation) | 5 | 2026-01-27 |
-| 30-contact truncation limit for list_contacts | Prevents output overflow, matches Phase 4's 50-event limit philosophy | 5 | 2026-01-27 |
-| Intersection filter logic for dual search | When both name and organization provided, contacts must match both (narrowing search) | 5 | 2026-01-27 |
-| Factory pattern for server creation | Separates McpServer creation from transport connection; enables stdio and in-memory testing | 6 | 2026-01-27 |
-| InMemoryTransport for integration tests | MCP SDK's linked transport pair enables in-process testing without CalDAV dependency | 6 | 2026-01-27 |
-| Minimal mock services for testing | Empty method stubs satisfy service interfaces for tool registration tests | 6 | 2026-01-27 |
-| Vitest for integration testing | Fast, ESM-native test runner with TypeScript support; 7 tests validating MCP protocol contracts | 6 | 2026-01-27 |
-
-### Active TODOs
-
-**Phase 1 (Foundation) — COMPLETE:**
-- ✓ Set up TypeScript project structure with MCP SDK (01-01)
-- ✓ Implement Zod configuration schemas for env vars (01-01)
-- ✓ Configure Pino logger with stderr destination (01-01)
-- ✓ Enforce HTTPS requirement (reject HTTP except localhost) (01-01)
-- ✓ Validate Basic Auth connection to CalDAV/CardDAV server (01-02)
-- ✓ AI-friendly error formatting for all startup failures (01-02)
-- ✓ MCP server entry point with stdio transport (01-02)
-
-**Phase 2 (Data Transformation) — COMPLETE:**
-- ✓ Parse iCalendar events into typed Event DTOs (ical.js) (02-01)
-- ✓ Preserve raw iCalendar/vCard text in _raw fields (02-01)
-- ✓ Handle timezone normalization (02-01)
-- ✓ Parse vCard contacts into typed Contact DTOs (ical.js) (02-02)
-- ✓ Expand RRULE recurring events with safety limits (02-02)
-
-**Cross-Phase:**
-- Validate tsdav compatibility with SabreDAV (Phase 3 - CRITICAL)
-- Test against multiple SabreDAV servers (Phase 6)
-- Document HTTPS and environment variable requirements
-
-### Known Blockers
-
-None currently.
-
-### Research Flags
-
-**Phase 3 (CalDAV Client) - HIGH:**
-- tsdav compatibility with SabreDAV not guaranteed
-- If integration fails, may need ts-caldav alternative or custom WebDAV client
-- Early prototype against dav.linagora.com recommended
-
-**Phase 6 (Integration) - MEDIUM:**
-- Server-specific quirks may surface (Nextcloud vs iCloud vs Zimbra)
-- May need workarounds for non-standard behavior
-
-### Verification Notes
-
-**Phase 1 Verification (2026-01-27):**
-- Score: 10/10 must-haves verified
-- All 4 requirements satisfied: INF-01, INF-02, INF-05, INF-06
-- Runtime tests passed: missing env vars, HTTP rejection, localhost exception
-- Minor: src/types/index.ts orphaned (Config type comes from Zod inference)
-- Full report: .planning/phases/01-foundation-configuration/01-VERIFICATION.md
-
-**Phase 2 Verification (2026-01-27):**
-- Score: 11/11 must-haves verified
-- Requirement satisfied: INF-03
-- Transformation layer: event.ts, contact.ts, timezone.ts, recurrence.ts
-- Full report: .planning/phases/02-data-transformation/02-VERIFICATION.md
-
-**Phase 3 Verification (2026-01-27):**
-- Score: 28/28 must-haves verified
-- All 3 requirements satisfied: CAL-05, CAL-06, INF-04
-- Components: retry.ts, cache.ts, discovery.ts, calendar-service.ts, addressbook-service.ts, client.ts (dual), index.ts (wiring)
-- Full report: .planning/phases/03-caldav-carddav-client-integration/03-VERIFICATION.md
-
-**Phase 4 Verification (2026-01-27):**
-- Score: 15/15 must-haves verified
-- All 6 requirements satisfied: CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08
-- Components: utils.ts (shared), next-event.ts, today.ts, date-range.ts, search.ts, tools/index.ts (aggregator), index.ts (wiring)
-- 5 MCP tools: get_next_event, get_todays_schedule, get_events_in_range, search_events, list_calendars
-- Full report: .planning/phases/04-calendar-query-services/04-VERIFICATION.md
-
-**Phase 5 Verification (2026-01-27):**
-- Score: 12/12 must-haves verified
-- All 4 requirements satisfied: CON-01, CON-02, CON-03, CON-04
-- Components: utils.ts (shared), search.ts, details.ts, list.ts, tools/index.ts (aggregator + list_addressbooks), index.ts (wiring)
-- 4 MCP tools: search_contacts, get_contact_details, list_contacts, list_addressbooks
-- Full report: .planning/phases/05-contact-query-services/05-VERIFICATION.md
-
-**Phase 6 Plan 01 Execution (2026-01-27):**
-- Tasks: 2/2 complete (createServer extraction, Vitest integration tests)
-- Duration: 3 minutes 2 seconds
-- Tests: 7/7 passing (2 server creation, 5 MCP protocol contracts)
-- All 9 MCP tools validated via InMemoryTransport
-- TypeScript compiles cleanly, entry point behavior unchanged
-- SUMMARY: .planning/phases/06-mcp-integration-testing/06-01-SUMMARY.md
-
-## Session Continuity
-
-**Last Session:** 2026-01-27 - Completed 06-01-PLAN.md
-
-**Stopped at:** Completed 06-01-PLAN.md (MCP Integration Testing Setup)
-
-**Resume file:** None
-
-**Next Session Should:**
-1. Execute Phase 6 Plan 02 (Manual Testing with real CalDAV server)
-2. Execute Phase 6 Plan 03 (End-to-End Testing)
-
-**Context for Next Developer:**
-- This is a TypeScript MCP server for CalDAV/CardDAV (read-only v1)
-- Critical path: Phase 3 CalDAV client — tsdav + SabreDAV compatibility
-- ✓ Phase 1 COMPLETE: ESM project, config validation, stderr logging, HTTPS enforcement, CalDAV client wrapper, MCP entry point, AI-friendly errors
-- ✓ Phase 2 COMPLETE: EventDTO/ContactDTO types, event/contact transformers, timezone registration, RRULE expansion
-- ✓ Phase 3 COMPLETE: Dual tsdav clients, discovery, calendar/addressbook services, cache, retry, startup wiring
-- ✓ Phase 4 COMPLETE: 5 MCP calendar tools (get_next_event, get_todays_schedule, get_events_in_range, search_events, list_calendars), tool registration aggregator, wired into src/index.ts
-- ✓ Phase 5 COMPLETE: 4 MCP contact tools (search_contacts, get_contact_details, list_contacts, list_addressbooks), dual-filter search, LLM-optimized formatting
-- ✓ Phase 6 Plan 01 COMPLETE: createServer() factory extracted, Vitest integration tests (7 passing), InMemoryTransport testing infrastructure
-- Server creates dual CalDAV/CardDAV clients at startup
-- CalendarService and AddressBookService initialized and available
-- CTag-based caching and retry infrastructure operational
-- MCP tools registered before server.connect() for discoverability
-- Tool pattern established: Zod schemas, try/catch, formatEvent/formatContact utilities
-- 9 total MCP tools operational: 5 calendar + 4 contact
-- Test infrastructure: InMemoryTransport for protocol tests, mock services for unit testing
-
-**Open Questions:**
-- Will tsdav work with SabreDAV? (to be tested in Phase 6 Plan 02 manual testing)
+Not yet defined. Candidates for v2:
+- Write operations (create/update/delete events and contacts)
+- OAuth 2.0 authentication
+- HTTP SSE transport
+- Free/busy availability queries
 
 ---
-
-*State initialized: 2026-01-27*
-*Last planning: 2026-01-27 - Phase 6 planned (3 plans, 2 waves, checker passed with 1 minor warning)*
+*v1 milestone completed: 2026-01-27*

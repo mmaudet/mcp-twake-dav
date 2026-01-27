@@ -218,9 +218,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [x] 06-01-PLAN.md — Refactor server for testability + Vitest integration tests for MCP protocol contracts
-- [x] 06-02-PLAN.md — README documentation + AGPL-3.0 LICENSE file
-- [x] 06-03-PLAN.md — Build verification + Claude Desktop end-to-end human verification (validated manually)
+- [ ] 06-01-PLAN.md — Refactor server for testability + Vitest integration tests for MCP protocol contracts
+- [ ] 06-02-PLAN.md — README documentation + AGPL-3.0 LICENSE file
+- [ ] 06-03-PLAN.md — Build verification + Claude Desktop end-to-end human verification
 
 **Notes:**
 - End-to-end validation with real Claude Desktop integration
@@ -229,7 +229,7 @@ Plans:
 - Documentation includes HTTPS requirement, environment variable setup
 - AGPL-3.0 license applied, sovereign infrastructure positioning documented
 
-**Status:** Complete
+**Status:** In Progress
 
 ---
 
@@ -242,27 +242,14 @@ Plans:
 | 3 - CalDAV/CardDAV Client | CAL-05, CAL-06, INF-04 | Complete | 100% |
 | 4 - Calendar Query Services | CAL-01, CAL-02, CAL-03, CAL-04, CAL-07, CAL-08 | Complete | 100% |
 | 5 - Contact Query Services | CON-01, CON-02, CON-03, CON-04 | Complete | 100% |
-| 6 - MCP Integration & Testing | (validation) | Complete | 100% |
+| 6 - MCP Integration & Testing | (validation) | In Progress | 0% |
 
 **Overall:** 18/18 requirements complete (100%)
 
-## Post-Roadmap Work
+## Next Steps
 
-The following features were delivered beyond the original roadmap:
-- Multi-auth support (Bearer token, ESNToken) — addresses v2 AUTH-02
-- Calendar filtering (`calendar` parameter + `DAV_DEFAULT_CALENDAR`)
-- Address book filtering (`addressbook` parameter + `DAV_DEFAULT_ADDRESSBOOK`)
-- npm publishing as `mcp-twake` (v0.1.1)
-- Community standards (CONTRIBUTING.md, issue templates, PR template)
-
-## Milestone Status
-
-**v1 Milestone: COMPLETE** (2026-01-27)
-- 18/18 requirements delivered
-- 13 integration tests passing
-- Published to npm as mcp-twake@0.1.1
-- Audit: PASS
+1. Execute Phase 6: MCP Integration & Testing (3 plans, 2 waves)
 
 ---
 
-*Last updated: 2026-01-27 after v1 milestone completion*
+*Last updated: 2026-01-27 after Phase 6 planning*
