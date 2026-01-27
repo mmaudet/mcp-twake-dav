@@ -77,11 +77,11 @@ describe('MCP Tool Registration', () => {
     await serverTransport.close();
   });
 
-  it('should register all 9 tools', async () => {
+  it('should register all 12 tools', async () => {
     const response = await client.listTools();
 
     expect(response.tools).toBeDefined();
-    expect(response.tools).toHaveLength(9);
+    expect(response.tools).toHaveLength(12);
   });
 
   it('should register tools with correct names', async () => {
@@ -89,6 +89,8 @@ describe('MCP Tool Registration', () => {
 
     const toolNames = response.tools.map((tool) => tool.name).sort();
     const expectedNames = [
+      'create_event',
+      'delete_event',
       'get_contact_details',
       'get_events_in_range',
       'get_next_event',
@@ -98,6 +100,7 @@ describe('MCP Tool Registration', () => {
       'list_contacts',
       'search_contacts',
       'search_events',
+      'update_event',
     ];
 
     expect(toolNames).toEqual(expectedNames);
@@ -202,5 +205,87 @@ describe('MCP Tool Registration', () => {
     const properties = searchEventsTool!.inputSchema.properties!;
     const hasQueryOrAttendee = 'query' in properties || 'attendee' in properties;
     expect(hasQueryOrAttendee).toBe(true);
+  });
+
+  it('should register create_event with required title, start, end parameters', async () => {
+    const response = await client.listTools();
+
+    const tool = response.tools.find((t) => t.name === 'create_event');
+    expect(tool).toBeDefined();
+
+    // Check input schema
+    expect(tool!.inputSchema).toBeDefined();
+    expect(tool!.inputSchema.properties).toBeDefined();
+
+    // Should have title, start, end properties
+    const properties = tool!.inputSchema.properties!;
+    expect('title' in properties).toBe(true);
+    expect('start' in properties).toBe(true);
+    expect('end' in properties).toBe(true);
+
+    // Should have required array with title, start, end
+    expect(tool!.inputSchema.required).toBeDefined();
+    expect(tool!.inputSchema.required).toContain('title');
+    expect(tool!.inputSchema.required).toContain('start');
+    expect(tool!.inputSchema.required).toContain('end');
+  });
+
+  it('should register update_event with required uid and optional fields', async () => {
+    const response = await client.listTools();
+
+    const tool = response.tools.find((t) => t.name === 'update_event');
+    expect(tool).toBeDefined();
+
+    // Check input schema
+    expect(tool!.inputSchema).toBeDefined();
+    expect(tool!.inputSchema.properties).toBeDefined();
+
+    // Should have uid property
+    const properties = tool!.inputSchema.properties!;
+    expect('uid' in properties).toBe(true);
+
+    // Should have required array with uid
+    expect(tool!.inputSchema.required).toBeDefined();
+    expect(tool!.inputSchema.required).toContain('uid');
+
+    // Should have optional fields
+    expect('title' in properties).toBe(true);
+    expect('start' in properties).toBe(true);
+    expect('end' in properties).toBe(true);
+    expect('description' in properties).toBe(true);
+    expect('location' in properties).toBe(true);
+  });
+
+  it('should register delete_event with required uid and optional calendar', async () => {
+    const response = await client.listTools();
+
+    const tool = response.tools.find((t) => t.name === 'delete_event');
+    expect(tool).toBeDefined();
+
+    // Check input schema
+    expect(tool!.inputSchema).toBeDefined();
+    expect(tool!.inputSchema.properties).toBeDefined();
+
+    // Should have uid property
+    const properties = tool!.inputSchema.properties!;
+    expect('uid' in properties).toBe(true);
+
+    // Should have required array with uid
+    expect(tool!.inputSchema.required).toBeDefined();
+    expect(tool!.inputSchema.required).toContain('uid');
+
+    // Should have optional calendar property
+    expect('calendar' in properties).toBe(true);
+  });
+
+  it('should include confirmation instruction in all write tool descriptions', async () => {
+    const response = await client.listTools();
+    const writeToolNames = ['create_event', 'update_event', 'delete_event'];
+
+    for (const name of writeToolNames) {
+      const tool = response.tools.find((t) => t.name === name);
+      expect(tool).toBeDefined();
+      expect(tool!.description).toContain('IMPORTANT');
+    }
   });
 });

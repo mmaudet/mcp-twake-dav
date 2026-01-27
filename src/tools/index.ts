@@ -1,7 +1,8 @@
 /**
  * MCP tool registration aggregator
  *
- * Registers all calendar query tools (Phase 4) and contact query tools (Phase 5).
+ * Registers all calendar query tools (Phase 4), contact query tools (Phase 5),
+ * and calendar write tools (Phase 9).
  */
 
 import { z } from 'zod';
@@ -13,6 +14,9 @@ import { registerNextEventTool } from './calendar/next-event.js';
 import { registerTodaysScheduleTool } from './calendar/today.js';
 import { registerDateRangeTool } from './calendar/date-range.js';
 import { registerSearchEventsTool } from './calendar/search.js';
+import { registerDeleteEventTool } from './calendar/delete-event.js';
+import { registerCreateEventTool } from './calendar/create-event.js';
+import { registerUpdateEventTool } from './calendar/update-event.js';
 import { registerSearchContactsTool } from './contacts/search.js';
 import { registerGetContactDetailsTool } from './contacts/details.js';
 import { registerListContactsTool } from './contacts/list.js';
@@ -22,6 +26,7 @@ import { registerListContactsTool } from './contacts/list.js';
  *
  * Phase 4: Registers calendar query tools (CAL-01 through CAL-08)
  * Phase 5: Registers contact query tools (CON-01 through CON-04)
+ * Phase 9: Registers calendar write tools (CALW-01 through CALW-03)
  *
  * @param server - MCP server instance
  * @param calendarService - Calendar service for calendar tools
@@ -41,6 +46,11 @@ export function registerAllTools(
   registerTodaysScheduleTool(server, calendarService, logger, defaultCalendar);
   registerDateRangeTool(server, calendarService, logger, defaultCalendar);
   registerSearchEventsTool(server, calendarService, logger, defaultCalendar);
+
+  // Register calendar write tools (Phase 9)
+  registerDeleteEventTool(server, calendarService, logger, defaultCalendar);
+  registerCreateEventTool(server, calendarService, logger, defaultCalendar);
+  registerUpdateEventTool(server, calendarService, logger, defaultCalendar);
 
   // Register list_calendars tool inline (CAL-05)
   server.tool(
