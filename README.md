@@ -285,8 +285,6 @@ See the [LICENSE](LICENSE) file for details.
 
 **Copyright (c) 2026 LINAGORA** <https://linagora.com>
 
-Built by LINAGORA to enable sovereign infrastructure for AI-powered calendar and contact management.
-
 ## Contributing
 
 Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on the development workflow, code style, and pull request process.
