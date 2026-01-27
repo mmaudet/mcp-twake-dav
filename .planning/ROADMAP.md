@@ -143,11 +143,18 @@ Plans:
 6. Recurring daily standup appears on all relevant days with correct times (DST-aware)
 7. All event times displayed in user's local timezone
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Install chrono-node + shared calendar query utilities (date parsing, formatting, filtering, recurrence expansion)
+- [ ] 04-02-PLAN.md — Create MCP calendar tools (5 tools) + wire into entry point
+
 **Notes:**
-- Implements CalendarService with date parsing, filtering, sorting
-- Natural language date parsing ("tomorrow", "next week") using date library
-- Multi-calendar query by default (searches all calendars unless specified)
-- Smart context filtering (returns essential properties, reduces token usage)
+- Uses chrono-node for natural language date parsing ("tomorrow", "next week")
+- Workflow-oriented MCP tools (Block Engineering pattern): single tool = fetch + transform + filter + format
+- Multi-calendar query by default (searches all calendars)
+- Concise event formatting optimized for LLM context windows (no _raw, no etag)
+- Recurring event expansion via Phase 2 infrastructure (ical.js RRULE)
 
 **Status:** Pending
 
