@@ -68,5 +68,14 @@ async function main() {
   }
 }
 
-// Start the server
-main();
+// CLI routing: `mcp-twake-dav setup` launches the wizard, otherwise starts the MCP server
+const args = process.argv.slice(2);
+if (args[0] === 'setup') {
+  const { runSetup } = await import('./cli/setup.js');
+  runSetup().catch((err) => {
+    console.error('\nSetup failed:', err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+} else {
+  main();
+}

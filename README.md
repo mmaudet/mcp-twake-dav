@@ -87,7 +87,74 @@ npm install
 npm run build
 ```
 
+## Quick Setup (Recommended)
+
+The easiest way to configure mcp-twake-dav is to use the interactive setup wizard:
+
+```bash
+npx mcp-twake-dav setup
+```
+
+The wizard will:
+1. Ask for your CalDAV/CardDAV server URL
+2. Ask for your authentication method and credentials
+3. Test the connection and discover your calendars and address books
+4. Let you choose default calendar and address book
+5. Generate and optionally write the configuration to your Claude Desktop config file
+
+Example session:
+```
+  mcp-twake-dav Setup Wizard
+  ───────────────────────────
+  This wizard will configure mcp-twake-dav for your agent.
+
+CalDAV/CardDAV server URL (e.g., https://dav.example.com): https://dav.linagora.com
+
+Authentication method:
+  1. Basic (username/password)
+  2. Bearer token (JWT)
+Choose [1-2]: 1
+Username: user@example.com
+Password:
+
+Testing connection...
+
+  Connected successfully!
+  Found 4 calendar(s) and 2 address book(s).
+
+Select default calendar:
+  1. My Calendar
+  2. Shared Calendar
+  3. (All)
+Choose [1-3]: 1
+
+--- MCP Server Configuration ---
+
+{
+  "mcpServers": {
+    "mcp-twake-dav": {
+      "command": "npx",
+      "args": ["-y", "mcp-twake-dav"],
+      "env": {
+        "DAV_URL": "https://dav.linagora.com",
+        "DAV_USERNAME": "user@example.com",
+        "DAV_PASSWORD": "********",
+        "DAV_DEFAULT_CALENDAR": "My Calendar"
+      }
+    }
+  }
+}
+
+Write configuration to config file? [Y/n]: y
+
+  Added "mcp-twake-dav" in claude_desktop_config.json
+
+Setup complete! Restart your agent to apply changes.
+```
+
 ## Configuration
+
+> **Tip:** Use `npx mcp-twake-dav setup` for interactive configuration instead of manual setup.
 
 ### Environment Variables
 
