@@ -1,12 +1,12 @@
 {
-  "name": "mcp-twake",
-  "version": "0.1.1",
+  "name": "mcp-twake-dav",
+  "version": "0.2.0",
   "description": "MCP server for Twake.ai: integrate your sovereign Digital Workplace with any MCP-compatible AI assistant",
   "license": "AGPL-3.0",
   "type": "module",
   "main": "build/index.js",
   "bin": {
-    "mcp-twake": "build/index.js"
+    "mcp-twake-dav": "build/index.js"
   },
   "files": [
     "build/"

@@ -1,14 +1,14 @@
-# Contributing to mcp-twake
+# Contributing to mcp-twake-dav
 
-Thank you for your interest in contributing to mcp-twake! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to mcp-twake-dav! This document provides guidelines and instructions for contributing.
 
 ## Getting Started
 
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/<your-username>/mcp-twake.git
-   cd mcp-twake
+   git clone https://github.com/<your-username>/mcp-twake-dav.git
+   cd mcp-twake-dav
    ```
 3. Install dependencies:
    ```bash
@@ -135,18 +135,18 @@ test: add integration test for search_events calendar param
 
 ## Reporting Bugs
 
-Use the [Bug Report](https://github.com/mmaudet/mcp-twake/issues/new?template=bug_report.md) issue template. Include:
+Use the [Bug Report](https://github.com/mmaudet/mcp-twake-dav/issues/new?template=bug_report.md) issue template. Include:
 - Steps to reproduce
 - Expected vs actual behavior
 - Environment details (Node.js version, OS, CalDAV server)
 
 ## Requesting Features
 
-Use the [Feature Request](https://github.com/mmaudet/mcp-twake/issues/new?template=feature_request.md) issue template. Describe:
+Use the [Feature Request](https://github.com/mmaudet/mcp-twake-dav/issues/new?template=feature_request.md) issue template. Describe:
 - The use case or problem
 - Your proposed solution
 - Any alternatives you considered
 
 ## License
 
-By contributing to mcp-twake, you agree that your contributions will be licensed under the [AGPL-3.0 license](LICENSE). All modifications must be shared under the same terms.
+By contributing to mcp-twake-dav, you agree that your contributions will be licensed under the [AGPL-3.0 license](LICENSE). All modifications must be shared under the same terms.

@@ -23,7 +23,7 @@ export type Logger = pino.Logger;
 export function createLogger(level: string = 'info'): Logger {
   return pino(
     {
-      name: 'mcp-twake',
+      name: 'mcp-twake-dav',
       level,
     },
     pino.destination(2) // CRITICAL: fd 2 = stderr. NEVER use stdout.

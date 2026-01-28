@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature or improvement for mcp-twake
+about: Suggest a new feature or improvement for mcp-twake-dav
 title: ''
 labels: enhancement
 assignees: ''

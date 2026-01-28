@@ -26,7 +26,7 @@ export function buildICalString(input: CreateEventInput): string {
   // Create VCALENDAR container
   const vcalendar = new ICAL.Component('vcalendar');
   vcalendar.updatePropertyWithValue('version', '2.0');
-  vcalendar.updatePropertyWithValue('prodid', '-//mcp-twake//EN');
+  vcalendar.updatePropertyWithValue('prodid', '-//mcp-twake-dav//EN');
 
   // Create VEVENT component
   const vevent = new ICAL.Component('vevent');

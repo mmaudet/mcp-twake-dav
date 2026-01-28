@@ -1,6 +1,6 @@
-# mcp-twake
+# mcp-twake-dav
 
-[![npm version](https://img.shields.io/npm/v/mcp-twake)](https://www.npmjs.com/package/mcp-twake)
+[![npm version](https://img.shields.io/npm/v/mcp-twake-dav)](https://www.npmjs.com/package/mcp-twake-dav)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
 
@@ -8,29 +8,40 @@
 
 ## Overview
 
-mcp-twake is a read-only Model Context Protocol (MCP) server that connects any MCP-compatible AI assistant (Claude Desktop, Claude CLI, etc.) to your CalDAV calendars and CardDAV contacts. Compatible with SabreDAV-based servers including Twake, Nextcloud, and other CalDAV/CardDAV implementations.
+mcp-twake-dav is a Model Context Protocol (MCP) server that connects any MCP-compatible AI assistant (Claude Desktop, Claude CLI, etc.) to your CalDAV calendars and CardDAV contacts. Compatible with SabreDAV-based servers including Twake, Nextcloud, and other CalDAV/CardDAV implementations.
 
 **Key benefits:**
 - Your data stays on your own servers — sovereign infrastructure
 - Works with any MCP-compatible AI assistant
-- Full control over calendar and contact data
+- Full control over calendar and contact data — read and write
 - Installable via npm — no local build required
 - Secure HTTPS-only connections (except localhost for development)
 
 ## Features
 
-**Calendar Tools:**
+**Calendar Read Tools:**
 - `get_next_event` - Find your next upcoming meeting
 - `get_todays_schedule` - View all events scheduled for today
 - `get_events_in_range` - Get events for a date range (natural language: "this week", "next month", etc.)
 - `search_events` - Search events by keyword or attendee name
 - `list_calendars` - List all available calendars
+- `check_availability` - Check free/busy availability for a time range
 
-**Contact Tools:**
+**Calendar Write Tools:**
+- `create_event` - Create a new calendar event (with optional recurrence)
+- `update_event` - Update an existing event (partial updates supported)
+- `delete_event` - Delete an event by UID
+
+**Contact Read Tools:**
 - `search_contacts` - Search contacts by name or organization
 - `get_contact_details` - Get full details for a specific contact
 - `list_contacts` - List all contacts (up to 30)
 - `list_addressbooks` - List all available address books
+
+**Contact Write Tools:**
+- `create_contact` - Create a new contact
+- `update_contact` - Update an existing contact (partial updates supported)
+- `delete_contact` - Delete a contact by UID
 
 **Advanced Features:**
 - Recurring event expansion (RRULE support with safety limits)
@@ -39,6 +50,8 @@ mcp-twake is a read-only Model Context Protocol (MCP) server that connects any M
 - Natural language date parsing (powered by chrono-node)
 - AI-friendly error messages for troubleshooting
 - Case-insensitive search across events and contacts
+- Parse-modify-serialize updates (preserves VALARM, X-properties, ATTENDEE, etc.)
+- MCP tool annotations (readOnlyHint, destructiveHint, openWorldHint)
 
 ## Prerequisites
 
@@ -57,19 +70,19 @@ mcp-twake is a read-only Model Context Protocol (MCP) server that connects any M
 
 **Via npx (recommended — no install needed):**
 ```bash
-npx mcp-twake
+npx mcp-twake-dav
 ```
 
 **Global install:**
 ```bash
-npm install -g mcp-twake
-mcp-twake
+npm install -g mcp-twake-dav
+mcp-twake-dav
 ```
 
 **From source (development):**
 ```bash
-git clone https://github.com/linagora/mcp-twake.git
-cd mcp-twake
+git clone https://github.com/mmaudet/mcp-twake-dav.git
+cd mcp-twake-dav
 npm install
 npm run build
 ```
@@ -112,7 +125,7 @@ JWT Bearer token, sent as `Authorization: Bearer <token>`.
 
 ### Claude Desktop Configuration
 
-To use mcp-twake with Claude Desktop, add the following to your Claude Desktop configuration file:
+To use mcp-twake-dav with Claude Desktop, add the following to your Claude Desktop configuration file:
 
 **Configuration file location:**
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -126,7 +139,7 @@ To use mcp-twake with Claude Desktop, add the following to your Claude Desktop c
   "mcpServers": {
     "twake": {
       "command": "npx",
-      "args": ["-y", "mcp-twake"],
+      "args": ["-y", "mcp-twake-dav"],
       "env": {
         "DAV_URL": "https://dav.example.com",
         "DAV_USERNAME": "user@example.com",
@@ -146,7 +159,7 @@ To use mcp-twake with Claude Desktop, add the following to your Claude Desktop c
   "mcpServers": {
     "twake": {
       "command": "npx",
-      "args": ["-y", "mcp-twake"],
+      "args": ["-y", "mcp-twake-dav"],
       "env": {
         "DAV_URL": "https://dav.example.com",
         "DAV_AUTH_METHOD": "bearer",
@@ -175,6 +188,14 @@ Once configured, you can ask Claude natural language questions about your calend
 - "When is my meeting with Pierre?"
 - "Find all meetings about the budget"
 - "Show me events with Marie as an attendee"
+- "Am I free tomorrow afternoon?"
+- "What's my first available 45-minute slot this week?"
+
+**Calendar management:**
+- "Create a meeting with Pierre tomorrow at 2pm"
+- "Move my 3pm meeting to 4pm"
+- "Delete the team sync event"
+- "Add a weekly standup every Monday at 9am"
 
 **Contact queries:**
 - "What's Marie's email address?"
@@ -184,6 +205,11 @@ Once configured, you can ask Claude natural language questions about your calend
 - "Search for contacts named Martin"
 - "What address books do I have?"
 
+**Contact management:**
+- "Create a contact for Jean Dupont with email jean@example.com"
+- "Update Marie's phone number"
+- "Delete the contact for old-employee@example.com"
+
 ## Available Tools
 
 | Tool Name | Description |
@@ -192,11 +218,18 @@ Once configured, you can ask Claude natural language questions about your calend
 | `get_todays_schedule` | Get all events for today, sorted by time. Optional `calendar` filter |
 | `get_events_in_range` | Get events for a date range (natural language). Optional `calendar` filter |
 | `search_events` | Search events by keyword or attendee. Optional `calendar` filter |
+| `check_availability` | Check free/busy availability for a time range. Optional `calendar` filter |
 | `list_calendars` | List all available calendars |
+| `create_event` | Create a new event with title, start, end, and optional recurrence |
+| `update_event` | Update an existing event by UID (partial updates) |
+| `delete_event` | Delete an event by UID |
 | `search_contacts` | Search contacts by name or organization. Optional `addressbook` filter |
 | `get_contact_details` | Get full details for a contact by name. Optional `addressbook` filter |
 | `list_contacts` | List contacts (limited to 30). Optional `addressbook` filter |
 | `list_addressbooks` | List all available address books |
+| `create_contact` | Create a new contact with name, email, phone, etc. |
+| `update_contact` | Update an existing contact by UID (partial updates) |
+| `delete_contact` | Delete a contact by UID |
 
 ## Troubleshooting
 
@@ -236,7 +269,7 @@ Once configured, you can ask Claude natural language questions about your calend
 
 **9. "Cannot find module" / Module resolution error**
 - **Problem:** Package not installed or build directory missing (when running from source)
-- **Solution:** Use `npx -y mcp-twake` (recommended) or, if running from source, run `npm run build` to compile TypeScript
+- **Solution:** Use `npx -y mcp-twake-dav` (recommended) or, if running from source, run `npm run build` to compile TypeScript
 
 **10. Connection refused on localhost**
 - **Problem:** Development server not running or wrong port
@@ -247,8 +280,8 @@ Once configured, you can ask Claude natural language questions about your calend
 For contributors working from source:
 
 ```bash
-git clone https://github.com/linagora/mcp-twake.git
-cd mcp-twake
+git clone https://github.com/mmaudet/mcp-twake-dav.git
+cd mcp-twake-dav
 npm install
 npm run build    # compile TypeScript
 npm test         # run tests
@@ -259,23 +292,23 @@ The server uses the MCP stdio transport and communicates via JSON-RPC on stdin/s
 
 ## Architecture
 
-mcp-twake is built with a layered architecture:
+mcp-twake-dav is built with a layered architecture:
 
 1. **Configuration Layer** - Zod-based environment variable validation with fail-fast behavior and HTTPS enforcement
 2. **Logging Layer** - Pino logger configured for stderr output (prevents stdout contamination in MCP stdio transport)
 3. **CalDAV/CardDAV Client Layer** - Dual tsdav clients for CalDAV and CardDAV with discovery, multi-method authentication (Basic, Bearer), and connection validation
 4. **Infrastructure Layer** - Retry logic with exponential backoff and jitter, CTag-based caching for performance optimization
 5. **Service Layer** - CalendarService and AddressBookService with resource fetching and caching management
-6. **Transformation Layer** - iCal.js-based parsing of iCalendar and vCard formats, timezone normalization, RRULE expansion
-7. **MCP Tool Layer** - 9 MCP tools exposing calendar and contact query functionality with natural language support
+6. **Transformation Layer** - iCal.js-based parsing of iCalendar and vCard formats, timezone normalization, RRULE expansion, parse-modify-serialize for updates
+7. **MCP Tool Layer** - 16 MCP tools exposing calendar and contact read/write functionality with natural language support and tool annotations
 8. **Entry Point** - MCP server initialization with stdio transport
 
 **Key design decisions:**
-- Read-only in v1 (write operations planned for v2)
 - ESM modules with `.js` import extensions (required by MCP SDK)
 - Passive cache design (services check `isCollectionDirty`, not cache-driven fetches)
 - AI-friendly error formatting ("What went wrong" + "How to fix it" pattern)
-- LLM-optimized data formatting (omitting internal metadata like _raw, etag, uid)
+- Parse-modify-serialize for updates (preserves VALARM, X-properties, ATTENDEE parameters)
+- MCP tool annotations for AI clients (readOnlyHint, destructiveHint, openWorldHint)
 
 ## License
 

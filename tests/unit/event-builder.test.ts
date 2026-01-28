@@ -37,7 +37,7 @@ describe('buildICalString', () => {
     // Verify VCALENDAR properties
     expect(comp.name).toBe('vcalendar');
     expect(comp.getFirstPropertyValue('version')).toBe('2.0');
-    expect(comp.getFirstPropertyValue('prodid')).toBe('-//mcp-twake//EN');
+    expect(comp.getFirstPropertyValue('prodid')).toBe('-//mcp-twake-dav//EN');
 
     // Verify VEVENT exists
     const vevent = comp.getFirstSubcomponent('vevent');

@@ -1,5 +1,5 @@
 /**
- * Shared TypeScript type definitions for mcp-twake
+ * Shared TypeScript type definitions for mcp-twake-dav
  */
 
 /**

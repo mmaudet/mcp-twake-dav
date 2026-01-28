@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help us improve mcp-twake
+about: Report a bug to help us improve mcp-twake-dav
 title: ''
 labels: bug
 assignees: ''
@@ -12,7 +12,7 @@ A clear and concise description of what the bug is.
 
 ## Steps to reproduce
 
-1. Configure mcp-twake with '...'
+1. Configure mcp-twake-dav with '...'
 2. Ask Claude '...'
 3. See error
 
@@ -30,7 +30,7 @@ What actually happened. Include error messages if any.
 - **OS:** (e.g., macOS 15, Ubuntu 24.04)
 - **CalDAV/CardDAV server:** (e.g., Nextcloud 30, Twake)
 - **MCP client:** (e.g., Claude Desktop, Claude CLI)
-- **mcp-twake version:** (e.g., 0.1.1)
+- **mcp-twake-dav version:** (e.g., 0.2.0)
 - **Auth method:** (basic / bearer)
 
 ## Logs

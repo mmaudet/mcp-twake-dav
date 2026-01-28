@@ -31,8 +31,8 @@ export function createServer(
 ): McpServer {
   // Initialize MCP server
   const server = new McpServer({
-    name: 'mcp-twake',
-    version: '0.1.1',
+    name: 'mcp-twake-dav',
+    version: '0.2.0',
   });
 
   // Register all calendar and contact query tools
