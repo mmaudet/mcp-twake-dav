@@ -132,11 +132,22 @@ export function formatEventTime(event: EventDTO): string {
 export function formatEvent(event: EventDTO): string {
   const lines: string[] = [];
 
-  // Line 1: Summary
-  lines.push(event.summary);
+  // Line 1: Summary (with status indicator if cancelled)
+  if (event.status === 'CANCELLED') {
+    lines.push(`${event.summary} [CANCELLED]`);
+  } else if (event.status === 'TENTATIVE') {
+    lines.push(`${event.summary} [TENTATIVE]`);
+  } else {
+    lines.push(event.summary);
+  }
 
   // Line 2: UID (needed for update_event/delete_event)
   lines.push(`  UID: ${event.uid}`);
+
+  // Line 3: Status (if not confirmed/undefined)
+  if (event.status && event.status !== 'CONFIRMED') {
+    lines.push(`  Status: ${event.status}`);
+  }
 
   // Line 3: Time (indented)
   lines.push(`  ${formatEventTime(event)}`);
@@ -146,8 +157,18 @@ export function formatEvent(event: EventDTO): string {
     lines.push(`  at ${event.location}`);
   }
 
-  // Line 5: Attendees (if present, indented)
-  if (event.attendees.length > 0) {
+  // Line 5: Attendees with participation status (if present, indented)
+  if (event.attendeeDetails && event.attendeeDetails.length > 0) {
+    const attendeesList = event.attendeeDetails
+      .map((a) => {
+        // Format partstat for display (e.g., NEEDS-ACTION -> needs-action)
+        const status = a.partstat.toLowerCase().replace(/-/g, '-');
+        return `${a.name} (${status})`;
+      })
+      .join(', ');
+    lines.push(`  Attendees: ${attendeesList}`);
+  } else if (event.attendees.length > 0) {
+    // Fallback to simple attendee list if no details available
     lines.push(`  Attendees: ${event.attendees.join(', ')}`);
   }
 

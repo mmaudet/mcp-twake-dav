@@ -6,6 +6,24 @@
  */
 
 /**
+ * Detailed attendee information from ATTENDEE property
+ *
+ * Corresponds to ATTENDEE property parameters in iCalendar (RFC 5545 Section 3.8.4.1)
+ */
+export interface AttendeeInfo {
+  /** Display name from CN parameter */
+  name: string;
+  /** Email address from mailto: value */
+  email: string;
+  /** Participation status from PARTSTAT parameter (NEEDS-ACTION, ACCEPTED, DECLINED, TENTATIVE, DELEGATED) */
+  partstat: string;
+  /** Role from ROLE parameter (REQ-PARTICIPANT, OPT-PARTICIPANT, NON-PARTICIPANT, CHAIR) */
+  role: string;
+  /** Whether response is requested from RSVP parameter */
+  rsvp?: boolean;
+}
+
+/**
  * Parsed iCalendar event from CalDAV
  *
  * Corresponds to VEVENT component in iCalendar (RFC 5545)
@@ -32,8 +50,14 @@ export interface EventDTO {
   /** Attendee names or emails from ATTENDEE properties (CN parameter preferred) */
   attendees: string[];
 
+  /** Detailed attendee information including participation status */
+  attendeeDetails: AttendeeInfo[];
+
   /** Timezone ID from VTIMEZONE component if present */
   timezone: string | undefined;
+
+  /** Event status from STATUS property (TENTATIVE, CONFIRMED, CANCELLED) */
+  status: string | undefined;
 
   /** True if event has RRULE property (recurring event) */
   isRecurring: boolean;

@@ -8,7 +8,7 @@
 import ICAL from 'ical.js';
 import type { Logger } from 'pino';
 import type { DAVCalendarObject } from 'tsdav';
-import type { EventDTO } from '../types/dtos.js';
+import type { AttendeeInfo, EventDTO } from '../types/dtos.js';
 import { registerTimezones } from './timezone.js';
 
 /**
@@ -61,6 +61,21 @@ export function transformCalendarObject(
       (a: any) => a.getParameter('cn') || a.getFirstValue() || ''
     );
 
+    // Extract detailed attendee information including participation status
+    const attendeeDetails: AttendeeInfo[] = event.attendees.map((a: any) => {
+      const emailValue = a.getFirstValue() || '';
+      // Remove mailto: prefix if present
+      const email = emailValue.replace(/^mailto:/i, '');
+
+      return {
+        name: a.getParameter('cn') || email,
+        email,
+        partstat: a.getParameter('partstat') || 'NEEDS-ACTION',
+        role: a.getParameter('role') || 'REQ-PARTICIPANT',
+        rsvp: a.getParameter('rsvp') === 'TRUE',
+      };
+    });
+
     // Extract timezone from first VTIMEZONE component
     const vtimezones = comp.getAllSubcomponents('vtimezone');
     let timezone: string | undefined;
@@ -73,6 +88,10 @@ export function transformCalendarObject(
     const rruleProp = vevent.getFirstProperty('rrule');
     const recurrenceRule = rruleProp?.toICALString();
 
+    // Extract event status (TENTATIVE, CONFIRMED, CANCELLED)
+    const statusValue = vevent.getFirstPropertyValue('status');
+    const status = typeof statusValue === 'string' ? statusValue.toUpperCase() : undefined;
+
     // Build EventDTO with all fields
     const eventDTO: EventDTO = {
       uid: event.uid,
@@ -82,7 +101,9 @@ export function transformCalendarObject(
       endDate: event.endDate.toJSDate(),
       location: event.location || undefined,
       attendees,
+      attendeeDetails,
       timezone,
+      status,
       isRecurring: !!recurrenceRule,
       recurrenceRule,
       url: davObject.url,
