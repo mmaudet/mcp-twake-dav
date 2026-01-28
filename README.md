@@ -154,8 +154,6 @@ Setup complete! Restart your agent to apply changes.
 
 ## Configuration
 
-> **Tip:** Use `npx mcp-twake-dav setup` for interactive configuration instead of manual setup.
-
 ### Environment Variables
 
 #### Basic Auth (default)
