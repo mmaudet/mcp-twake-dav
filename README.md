@@ -6,6 +6,8 @@
 
 **MCP server for [Twake.ai](https://www.twake.ai/) — integrate your sovereign Digital Workplace with any MCP-compatible AI assistant**
 
+![Twake Calendar](assets/twake-calendar-screenshot.png)
+
 ## Overview
 
 mcp-twake-dav is a Model Context Protocol (MCP) server that connects any MCP-compatible AI assistant (Claude Desktop, Claude CLI, etc.) to your CalDAV calendars and CardDAV contacts. Compatible with SabreDAV-based servers including Twake, Nextcloud, and other CalDAV/CardDAV implementations.
