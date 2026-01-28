@@ -47,6 +47,7 @@ mcp-twake-dav is a Model Context Protocol (MCP) server that connects any MCP-com
 
 **Advanced Features:**
 - Event status display (CANCELLED, TENTATIVE events clearly marked)
+- Attendee participation status (ACCEPTED, DECLINED, TENTATIVE, NEEDS-ACTION)
 - Recurring event expansion (RRULE support with safety limits)
 - Multi-calendar and multi-addressbook search
 - CTag-based caching for improved performance
