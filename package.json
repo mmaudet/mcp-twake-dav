@@ -1,6 +1,6 @@
 {
   "name": "mcp-twake-dav",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server for Twake.ai: integrate your sovereign Digital Workplace with any MCP-compatible AI assistant",
   "license": "AGPL-3.0",
   "type": "module",
@@ -29,6 +29,14 @@
     "calendar",
     "contacts"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mmaudet/mcp-twake-dav.git"
+  },
+  "homepage": "https://github.com/mmaudet/mcp-twake-dav#readme",
+  "bugs": {
+    "url": "https://github.com/mmaudet/mcp-twake-dav/issues"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.3",
     "chrono-node": "^2.9.0",
