@@ -135,15 +135,18 @@ export function formatEvent(event: EventDTO): string {
   // Line 1: Summary
   lines.push(event.summary);
 
-  // Line 2: Time (indented)
+  // Line 2: UID (needed for update_event/delete_event)
+  lines.push(`  UID: ${event.uid}`);
+
+  // Line 3: Time (indented)
   lines.push(`  ${formatEventTime(event)}`);
 
-  // Line 3: Location (if present, indented)
+  // Line 4: Location (if present, indented)
   if (event.location) {
     lines.push(`  at ${event.location}`);
   }
 
-  // Line 4: Attendees (if present, indented)
+  // Line 5: Attendees (if present, indented)
   if (event.attendees.length > 0) {
     lines.push(`  Attendees: ${event.attendees.join(', ')}`);
   }

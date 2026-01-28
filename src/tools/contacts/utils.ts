@@ -93,7 +93,10 @@ export function formatContact(contact: ContactDTO): string {
     || '(No name)';
   lines.push(displayName);
 
-  // Line 2+: Emails (indented)
+  // Line 2: UID (needed for update_contact/delete_contact)
+  lines.push(`  UID: ${contact.uid}`);
+
+  // Line 3+: Emails (indented)
   if (contact.emails.length > 0) {
     contact.emails.forEach(email => {
       lines.push(`  Email: ${email}`);
