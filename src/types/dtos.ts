@@ -142,6 +142,8 @@ export interface CreateEventInput {
   recurrence?: string;
   /** Target calendar display name or path - optional, for routing to correct calendar */
   calendar?: string;
+  /** Timezone for the event (e.g., "Europe/Paris") - dates will be stored in UTC */
+  timezone?: string;
 }
 
 /**

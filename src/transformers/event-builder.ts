@@ -72,7 +72,7 @@ export function buildICalString(input: CreateEventInput): string {
     event.startDate = startTime;
     event.endDate = endTime;
   } else {
-    // Regular events use DATE-TIME
+    // Regular events use DATE-TIME in UTC format
     const startDate = typeof input.start === 'string'
       ? new Date(input.start)
       : input.start;
@@ -81,8 +81,9 @@ export function buildICalString(input: CreateEventInput): string {
       : input.end;
 
     // Use fromJSDate with UTC flag (second parameter true for UTC)
-    event.startDate = ICAL.Time.fromJSDate(startDate, false);
-    event.endDate = ICAL.Time.fromJSDate(endDate, false);
+    // This creates dates ending with 'Z' which are universally understood
+    event.startDate = ICAL.Time.fromJSDate(startDate, true);
+    event.endDate = ICAL.Time.fromJSDate(endDate, true);
   }
 
   // Set optional properties

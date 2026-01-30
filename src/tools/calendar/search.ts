@@ -29,6 +29,7 @@ export function registerSearchEventsTool(
   calendarService: CalendarService,
   logger: Logger,
   defaultCalendar?: string,
+  userTimezone?: string,
 ): void {
   server.tool(
     'search_events',
@@ -133,7 +134,7 @@ export function registerSearchEventsTool(
         events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
         // Format all events
-        const formattedEvents = events.map((event) => formatEvent(event)).join('\n\n');
+        const formattedEvents = events.map((event) => formatEvent(event, userTimezone)).join('\n\n');
 
         const searchDescription = params.query
           ? params.attendee

@@ -25,6 +25,7 @@ export function registerCreateEventTool(
   calendarService: CalendarService,
   logger: Logger,
   defaultCalendar?: string,
+  userTimezone?: string,
 ): void {
   server.tool(
     'create_event',
@@ -81,11 +82,12 @@ export function registerCreateEventTool(
 
         // Validate: end must be after start
         if (endDate <= startDate) {
+          const displayTz = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
           return {
             content: [
               {
                 type: 'text' as const,
-                text: `End date must be after start date. Start: ${startDate.toLocaleString()}, End: ${endDate.toLocaleString()}`,
+                text: `End date must be after start date. Start: ${startDate.toLocaleString('en-US', { timeZone: displayTz })}, End: ${endDate.toLocaleString('en-US', { timeZone: displayTz })}`,
               },
             ],
             isError: true,
@@ -95,7 +97,7 @@ export function registerCreateEventTool(
         // Resolve target calendar
         const resolvedCalendar = params.calendar || defaultCalendar;
 
-        // Build iCalendar string
+        // Build iCalendar string with timezone
         const iCalString = buildICalString({
           title: params.title,
           start: startDate,
@@ -104,12 +106,16 @@ export function registerCreateEventTool(
           location: params.location,
           allDay: params.allDay,
           recurrence: params.recurrence,
+          timezone: userTimezone,
         });
 
         // Create event
         const result = await calendarService.createEvent(iCalString, resolvedCalendar);
 
-        // Format success response
+        // Format success response with user timezone
+        const displayTimezone = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const tzOptions: Intl.DateTimeFormatOptions = { timeZone: displayTimezone };
+
         const calendarText = resolvedCalendar ? ` in calendar "${resolvedCalendar}"` : '';
         const locationText = params.location ? `\nLocation: ${params.location}` : '';
         const descriptionText = params.description ? `\nDescription: ${params.description}` : '';
@@ -118,8 +124,8 @@ export function registerCreateEventTool(
         const responseText = [
           `Event created successfully${calendarText}:`,
           `Title: ${params.title}`,
-          `Start: ${startDate.toLocaleString()}`,
-          `End: ${endDate.toLocaleString()}`,
+          `Start: ${startDate.toLocaleString('en-US', tzOptions)} (${displayTimezone})`,
+          `End: ${endDate.toLocaleString('en-US', tzOptions)}`,
           locationText,
           descriptionText,
           recurrenceText,

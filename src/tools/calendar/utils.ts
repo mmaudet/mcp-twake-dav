@@ -94,25 +94,31 @@ export function parseNaturalDateRange(expression: string): TimeRange | null {
  * Example: "Mon Jan 30, 2:00 PM - 3:00 PM (Europe/Paris)"
  *
  * @param event - EventDTO with startDate, endDate, timezone
+ * @param userTimezone - Optional user timezone for display (e.g., "Europe/Paris")
  * @returns Formatted time string
  */
-export function formatEventTime(event: EventDTO): string {
+export function formatEventTime(event: EventDTO, userTimezone?: string): string {
+  // Use user timezone if provided, otherwise use system default
+  const displayTimezone = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
   const options: Intl.DateTimeFormatOptions = {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: displayTimezone,
   };
 
   const startStr = event.startDate.toLocaleString('en-US', options);
   const endTime = event.endDate.toLocaleString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: displayTimezone,
   });
 
-  // Include timezone if available
-  const timezoneStr = event.timezone ? ` (${event.timezone})` : '';
+  // Show the display timezone in parentheses
+  const timezoneStr = ` (${displayTimezone})`;
 
   return `${startStr} - ${endTime}${timezoneStr}`;
 }
@@ -127,9 +133,10 @@ export function formatEventTime(event: EventDTO): string {
  *   Attendees: Pierre Dupont, Marie Martin
  *
  * @param event - EventDTO to format
+ * @param userTimezone - Optional user timezone for display (e.g., "Europe/Paris")
  * @returns Multi-line formatted event string
  */
-export function formatEvent(event: EventDTO): string {
+export function formatEvent(event: EventDTO, userTimezone?: string): string {
   const lines: string[] = [];
 
   // Line 1: Summary (with status indicator if cancelled)
@@ -150,7 +157,7 @@ export function formatEvent(event: EventDTO): string {
   }
 
   // Line 3: Time (indented)
-  lines.push(`  ${formatEventTime(event)}`);
+  lines.push(`  ${formatEventTime(event, userTimezone)}`);
 
   // Line 4: Location (if present, indented)
   if (event.location) {

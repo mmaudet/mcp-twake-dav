@@ -26,6 +26,7 @@ export function registerNextEventTool(
   calendarService: CalendarService,
   logger: Logger,
   defaultCalendar?: string,
+  userTimezone?: string,
 ): void {
   server.tool(
     'get_next_event',
@@ -82,7 +83,7 @@ export function registerNextEventTool(
         upcomingEvents.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
         const nextEvent = upcomingEvents[0];
 
-        const formattedEvent = formatEvent(nextEvent);
+        const formattedEvent = formatEvent(nextEvent, userTimezone);
         logger.info({ uid: nextEvent.uid }, 'Next event found');
 
         return {

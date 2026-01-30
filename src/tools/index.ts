@@ -65,20 +65,21 @@ export function registerAllTools(
   logger: Logger,
   defaultCalendar?: string,
   defaultAddressBook?: string,
+  userTimezone?: string,
 ): void {
   // Register calendar query tools (Phase 4)
-  registerNextEventTool(server, calendarService, logger, defaultCalendar);
-  registerTodaysScheduleTool(server, calendarService, logger, defaultCalendar);
-  registerDateRangeTool(server, calendarService, logger, defaultCalendar);
-  registerSearchEventsTool(server, calendarService, logger, defaultCalendar);
+  registerNextEventTool(server, calendarService, logger, defaultCalendar, userTimezone);
+  registerTodaysScheduleTool(server, calendarService, logger, defaultCalendar, userTimezone);
+  registerDateRangeTool(server, calendarService, logger, defaultCalendar, userTimezone);
+  registerSearchEventsTool(server, calendarService, logger, defaultCalendar, userTimezone);
 
   // Register calendar write tools (Phase 9)
   registerDeleteEventTool(server, calendarService, logger, defaultCalendar);
-  registerCreateEventTool(server, calendarService, logger, defaultCalendar);
+  registerCreateEventTool(server, calendarService, logger, defaultCalendar, userTimezone);
   registerUpdateEventTool(server, calendarService, logger, defaultCalendar);
 
   // Register check_availability tool (Phase 11)
-  registerCheckAvailabilityTool(server, calendarService, logger, defaultCalendar);
+  registerCheckAvailabilityTool(server, calendarService, logger, defaultCalendar, userTimezone);
 
   // Register list_calendars tool inline (CAL-05)
   server.tool(

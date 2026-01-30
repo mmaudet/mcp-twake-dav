@@ -27,6 +27,7 @@ export function registerDateRangeTool(
   calendarService: CalendarService,
   logger: Logger,
   defaultCalendar?: string,
+  userTimezone?: string,
 ): void {
   server.tool(
     'get_events_in_range',
@@ -87,7 +88,7 @@ export function registerDateRangeTool(
         events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
         // Format all events
-        const formattedEvents = events.map((event) => formatEvent(event)).join('\n\n');
+        const formattedEvents = events.map((event) => formatEvent(event, userTimezone)).join('\n\n');
         const result = `Events for ${params.when} (${events.length} total):\n\n${formattedEvents}`;
 
         logger.info({ when: params.when, count: events.length }, 'Events retrieved for date range');

@@ -24,6 +24,7 @@ export interface SetupParams {
   defaultCalendar?: string;
   defaultAddressBook?: string;
   credentialsFile?: string;
+  userTimezone?: string;
 }
 
 /**
@@ -90,6 +91,9 @@ export function buildMcpServerEntry(params: SetupParams): McpServerEntry {
   }
   if (params.defaultAddressBook) {
     env.DAV_DEFAULT_ADDRESSBOOK = params.defaultAddressBook;
+  }
+  if (params.userTimezone) {
+    env.USER_TIMEZONE = params.userTimezone;
   }
 
   return {

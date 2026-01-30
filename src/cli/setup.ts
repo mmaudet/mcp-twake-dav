@@ -230,7 +230,14 @@ export async function runSetup(): Promise<void> {
       }
     }
 
-    // --- Step 7: Secure credentials storage ---
+    // --- Step 7: User timezone ---
+    console.log('\n--- Timezone Configuration ---');
+    const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    console.log(`  Detected system timezone: ${systemTimezone}`);
+
+    const userTimezone = await ask(rl, 'Your timezone', systemTimezone);
+
+    // --- Step 8: Secure credentials storage ---
     let credentialsFile: string | undefined;
 
     console.log('\n--- Security Options ---');
@@ -244,7 +251,7 @@ export async function runSetup(): Promise<void> {
       credentialsFile = await ask(rl, 'Credentials file path', DEFAULT_CREDENTIALS_FILE);
     }
 
-    // --- Step 8: Build and display config ---
+    // --- Step 9: Build and display config ---
     const params: SetupParams = {
       url,
       authMethod,
@@ -254,6 +261,7 @@ export async function runSetup(): Promise<void> {
       defaultCalendar,
       defaultAddressBook,
       credentialsFile,
+      userTimezone,
     };
 
     console.log('\n--- MCP Server Configuration ---\n');
@@ -264,7 +272,7 @@ export async function runSetup(): Promise<void> {
       console.log('  (File will be created with permissions 600 - owner read/write only)');
     }
 
-    // --- Step 9: Write to config file ---
+    // --- Step 10: Write to config file ---
     const configPath = detectConfigFile();
 
     if (!configPath) {

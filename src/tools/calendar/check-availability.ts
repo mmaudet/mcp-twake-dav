@@ -26,18 +26,23 @@ import type { FreeBusyPeriod } from '../../types/dtos.js';
  * @param periods - Array of busy periods to display
  * @param queryStart - Start of the queried time range
  * @param queryEnd - End of the queried time range
+ * @param userTimezone - Optional user timezone for display
  * @returns MCP tool response content
  */
 function formatFreeBusyResponse(
   periods: FreeBusyPeriod[],
   queryStart: Date,
   queryEnd: Date,
+  userTimezone?: string,
 ) {
+  const displayTimezone = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const tzOptions = { timeZone: displayTimezone };
+
   if (periods.length === 0) {
     return {
       content: [{
         type: 'text' as const,
-        text: `You are free from ${queryStart.toLocaleString()} to ${queryEnd.toLocaleString()}. No busy periods found.`,
+        text: `You are free from ${queryStart.toLocaleString('en-US', tzOptions)} to ${queryEnd.toLocaleString('en-US', tzOptions)} (${displayTimezone}). No busy periods found.`,
       }],
     };
   }
@@ -46,15 +51,17 @@ function formatFreeBusyResponse(
     const startStr = p.start.toLocaleString('en-US', {
       weekday: 'short', month: 'short', day: 'numeric',
       hour: 'numeric', minute: '2-digit',
+      timeZone: displayTimezone,
     });
     const endStr = p.end.toLocaleString('en-US', {
       hour: 'numeric', minute: '2-digit',
+      timeZone: displayTimezone,
     });
     return `${i + 1}. ${startStr} - ${endStr}`;
   });
 
   const text = [
-    `Busy periods from ${queryStart.toLocaleString()} to ${queryEnd.toLocaleString()}:`,
+    `Busy periods from ${queryStart.toLocaleString('en-US', tzOptions)} to ${queryEnd.toLocaleString('en-US', tzOptions)} (${displayTimezone}):`,
     '',
     ...periodLines,
     '',
@@ -82,6 +89,7 @@ export function registerCheckAvailabilityTool(
   calendarService: CalendarService,
   logger: Logger,
   defaultCalendar?: string,
+  userTimezone?: string,
 ): void {
   server.tool(
     'check_availability',
@@ -220,7 +228,7 @@ export function registerCheckAvailabilityTool(
 
           if (busyPeriods.length > 0 || response.ok !== false) {
             logger.info({ periods: busyPeriods.length }, 'Server-side free-busy-query succeeded');
-            return formatFreeBusyResponse(busyPeriods, startDate, endDate);
+            return formatFreeBusyResponse(busyPeriods, startDate, endDate, userTimezone);
           }
 
           throw new Error('No VFREEBUSY data in server response');
@@ -234,7 +242,7 @@ export function registerCheckAvailabilityTool(
         );
         const events = getEventsWithRecurrenceExpansion(rawEvents, timeRange, logger);
         const busyPeriods = computeBusyPeriods(events, logger);
-        return formatFreeBusyResponse(busyPeriods, startDate, endDate);
+        return formatFreeBusyResponse(busyPeriods, startDate, endDate, userTimezone);
       } catch (err) {
         logger.error({ err }, 'Error in check_availability');
         return {

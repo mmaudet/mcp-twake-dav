@@ -28,6 +28,7 @@ export function registerTodaysScheduleTool(
   calendarService: CalendarService,
   logger: Logger,
   defaultCalendar?: string,
+  userTimezone?: string,
 ): void {
   server.tool(
     'get_todays_schedule',
@@ -81,7 +82,7 @@ export function registerTodaysScheduleTool(
         events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
         // Format all events
-        const formattedEvents = events.map((event) => formatEvent(event)).join('\n\n');
+        const formattedEvents = events.map((event) => formatEvent(event, userTimezone)).join('\n\n');
         const result = `Today's schedule (${events.length} event${events.length === 1 ? '' : 's'}):\n\n${formattedEvents}`;
 
         logger.info({ count: events.length }, 'Today\'s schedule retrieved');
