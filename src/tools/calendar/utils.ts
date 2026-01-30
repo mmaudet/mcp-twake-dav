@@ -163,7 +163,8 @@ export function formatEvent(event: EventDTO): string {
       .map((a) => {
         // Format partstat for display (e.g., NEEDS-ACTION -> needs-action)
         const status = a.partstat.toLowerCase().replace(/-/g, '-');
-        return `${a.name} (${status})`;
+        // Include email for easy contact (format: Name <email> (status))
+        return `${a.name} <${a.email}> (${status})`;
       })
       .join(', ');
     lines.push(`  Attendees: ${attendeesList}`);
