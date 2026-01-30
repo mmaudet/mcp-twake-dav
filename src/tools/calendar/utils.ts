@@ -260,6 +260,16 @@ export function getEventsWithRecurrenceExpansion(
           continue;
         }
 
+        // Collect all VEVENT exceptions (those with RECURRENCE-ID)
+        // This handles cancelled instances (STATUS=CANCELLED) that use RECURRENCE-ID instead of EXDATE
+        const allVevents = comp.getAllSubcomponents('vevent');
+        const exceptions = allVevents.filter(
+          (v: ICAL.Component) => v.hasProperty('recurrence-id')
+        );
+
+        // Create ICAL.Event with explicit exceptions
+        const icalEvent = new ICAL.Event(vevent, { exceptions });
+
         // Calculate event duration for occurrence generation
         const duration = eventDTO.endDate.getTime() - eventDTO.startDate.getTime();
 
@@ -272,14 +282,48 @@ export function getEventsWithRecurrenceExpansion(
 
         // Create EventDTO for each occurrence (preserving original fields, updating dates)
         for (const occurrenceDate of occurrences) {
-          const occurrenceEnd = new Date(occurrenceDate.getTime() + duration);
+          // Check if this occurrence has an exception (RECURRENCE-ID)
+          // This handles cancelled instances that use RECURRENCE-ID + STATUS=CANCELLED
+          // IMPORTANT: Use 'true' to create UTC time, matching the RECURRENCE-ID format
+          const occurrenceTime = ICAL.Time.fromJSDate(occurrenceDate, true);
+          const details = icalEvent.getOccurrenceDetails(occurrenceTime);
 
-          allEvents.push({
-            ...eventDTO,
-            startDate: occurrenceDate,
-            endDate: occurrenceEnd,
-            // Keep other fields (summary, location, attendees, etc.) from original
-          });
+          // If this occurrence has an exception, check if it's cancelled
+          if (details.item !== icalEvent) {
+            // This occurrence has a RECURRENCE-ID exception
+            const exceptionVevent = details.item.component;
+            const exceptionStatus = exceptionVevent.getFirstPropertyValue('status');
+            if (exceptionStatus && String(exceptionStatus).toUpperCase() === 'CANCELLED') {
+              // Skip cancelled instances
+              logger.debug(
+                { uid: eventDTO.uid, date: occurrenceDate.toISOString() },
+                'Skipping cancelled recurring instance (RECURRENCE-ID + STATUS=CANCELLED)'
+              );
+              continue;
+            }
+
+            // For non-cancelled exceptions, use the exception's dates and summary
+            const exceptionEvent = details.item;
+            allEvents.push({
+              ...eventDTO,
+              summary: exceptionEvent.summary || eventDTO.summary,
+              description: exceptionEvent.description || eventDTO.description,
+              location: exceptionEvent.location || eventDTO.location,
+              startDate: details.startDate.toJSDate(),
+              endDate: details.endDate.toJSDate(),
+              status: exceptionStatus ? String(exceptionStatus).toUpperCase() : eventDTO.status,
+            });
+          } else {
+            // Normal occurrence (no exception)
+            const occurrenceEnd = new Date(occurrenceDate.getTime() + duration);
+
+            allEvents.push({
+              ...eventDTO,
+              startDate: occurrenceDate,
+              endDate: occurrenceEnd,
+              // Keep other fields (summary, location, attendees, etc.) from original
+            });
+          }
         }
       } catch (err) {
         logger.error(
