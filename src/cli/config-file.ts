@@ -23,7 +23,13 @@ export interface SetupParams {
   token?: string;
   defaultCalendar?: string;
   defaultAddressBook?: string;
+  credentialsFile?: string;
 }
+
+/**
+ * Default credentials file path
+ */
+export const DEFAULT_CREDENTIALS_FILE = '~/.mcp-twake-dav.env';
 
 /**
  * Detect the Claude Desktop config file path for the current OS
@@ -53,18 +59,30 @@ export function detectConfigFile(): string | null {
 
 /**
  * Build the mcpServers entry for Claude Desktop config
+ *
+ * If credentialsFile is provided, credentials are stored externally
+ * and only DAV_CREDENTIALS_FILE is included in the config.
  */
 export function buildMcpServerEntry(params: SetupParams): McpServerEntry {
   const env: Record<string, string> = {
     DAV_URL: params.url,
   };
 
-  if (params.authMethod === 'basic') {
-    env.DAV_USERNAME = params.username!;
-    env.DAV_PASSWORD = params.password!;
+  if (params.credentialsFile) {
+    // Use external credentials file - no sensitive data in config
+    env.DAV_CREDENTIALS_FILE = params.credentialsFile;
+    if (params.authMethod !== 'basic') {
+      env.DAV_AUTH_METHOD = params.authMethod;
+    }
   } else {
-    env.DAV_AUTH_METHOD = params.authMethod;
-    env.DAV_TOKEN = params.token!;
+    // Legacy: inline credentials (not recommended)
+    if (params.authMethod === 'basic') {
+      env.DAV_USERNAME = params.username!;
+      env.DAV_PASSWORD = params.password!;
+    } else {
+      env.DAV_AUTH_METHOD = params.authMethod;
+      env.DAV_TOKEN = params.token!;
+    }
   }
 
   if (params.defaultCalendar) {
@@ -82,12 +100,61 @@ export function buildMcpServerEntry(params: SetupParams): McpServerEntry {
 }
 
 /**
- * Build the full config snippet for display (passwords masked)
+ * Build the content of a credentials file
+ */
+export function buildCredentialsFileContent(params: SetupParams): string {
+  const lines: string[] = [
+    '# mcp-twake-dav credentials',
+    '# This file contains sensitive credentials - keep it secure!',
+    '# Recommended permissions: chmod 600 ~/.mcp-twake-dav.env',
+    '',
+  ];
+
+  if (params.authMethod === 'basic') {
+    lines.push(`DAV_USERNAME=${params.username}`);
+    lines.push(`DAV_PASSWORD=${params.password}`);
+  } else {
+    lines.push(`DAV_TOKEN=${params.token}`);
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
+
+/**
+ * Expand ~ to home directory
+ */
+export function expandHome(filePath: string): string {
+  if (filePath.startsWith('~/')) {
+    return path.join(os.homedir(), filePath.slice(2));
+  }
+  return filePath;
+}
+
+/**
+ * Write credentials to a separate file with restricted permissions
+ *
+ * @param credentialsPath - Path to credentials file (supports ~)
+ * @param params - Setup parameters containing credentials
+ */
+export async function writeCredentialsFile(
+  credentialsPath: string,
+  params: SetupParams,
+): Promise<void> {
+  const fullPath = expandHome(credentialsPath);
+  const content = buildCredentialsFileContent(params);
+
+  // Write file
+  await fs.writeFile(fullPath, content, { encoding: 'utf-8', mode: 0o600 });
+}
+
+/**
+ * Build the full config snippet for display (passwords masked if inline)
  */
 export function buildConfigSnippet(params: SetupParams): string {
   const entry = buildMcpServerEntry(params);
 
-  // Mask sensitive values for display
+  // Mask sensitive values for display (only needed if not using credentials file)
   const maskedEnv = { ...entry.env };
   if (maskedEnv.DAV_PASSWORD) maskedEnv.DAV_PASSWORD = '********';
   if (maskedEnv.DAV_TOKEN) maskedEnv.DAV_TOKEN = '********';

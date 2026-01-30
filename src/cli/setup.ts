@@ -24,6 +24,8 @@ import {
   buildConfigSnippet,
   mergeConfigFile,
   configFileExists,
+  writeCredentialsFile,
+  DEFAULT_CREDENTIALS_FILE,
 } from './config-file.js';
 
 const AUTH_METHODS = ['basic', 'bearer'] as const;
@@ -228,7 +230,21 @@ export async function runSetup(): Promise<void> {
       }
     }
 
-    // --- Step 7: Build and display config ---
+    // --- Step 7: Secure credentials storage ---
+    let credentialsFile: string | undefined;
+
+    console.log('\n--- Security Options ---');
+    console.log('  For better security, credentials can be stored in a separate file');
+    console.log('  with restricted permissions (readable only by you).');
+    console.log(`  Default location: ${DEFAULT_CREDENTIALS_FILE}`);
+
+    const useSecureStorage = await askYesNo(rl, 'Store credentials in a secure separate file? (Recommended)');
+
+    if (useSecureStorage) {
+      credentialsFile = await ask(rl, 'Credentials file path', DEFAULT_CREDENTIALS_FILE);
+    }
+
+    // --- Step 8: Build and display config ---
     const params: SetupParams = {
       url,
       authMethod,
@@ -237,17 +253,26 @@ export async function runSetup(): Promise<void> {
       token,
       defaultCalendar,
       defaultAddressBook,
+      credentialsFile,
     };
 
     console.log('\n--- MCP Server Configuration ---\n');
     console.log(buildConfigSnippet(params));
 
-    // --- Step 8: Write to config file ---
+    if (credentialsFile) {
+      console.log(`\n  Credentials will be stored in: ${credentialsFile}`);
+      console.log('  (File will be created with permissions 600 - owner read/write only)');
+    }
+
+    // --- Step 9: Write to config file ---
     const configPath = detectConfigFile();
 
     if (!configPath) {
       console.log('\n  Could not detect config file path for this OS.');
       console.log('  Copy the JSON above into your Claude Desktop configuration manually.');
+      if (credentialsFile) {
+        console.log(`  Then manually create ${credentialsFile} with your credentials.`);
+      }
     } else {
       const exists = await configFileExists(configPath);
       const shortPath = configPath.replace(process.env.HOME || '', '~');
@@ -260,16 +285,25 @@ export async function runSetup(): Promise<void> {
       const write = await askYesNo(rl, 'Write configuration to config file?');
 
       if (write) {
+        // Write credentials file first if using secure storage
+        if (credentialsFile) {
+          await writeCredentialsFile(credentialsFile, params);
+          console.log(`\n  Created credentials file: ${credentialsFile}`);
+        }
+
         const entry = buildMcpServerEntry(params);
         const overwritten = await mergeConfigFile(configPath, entry);
 
         if (overwritten) {
-          console.log('\n  Updated "mcp-twake-dav" in claude_desktop_config.json');
+          console.log('  Updated "mcp-twake-dav" in claude_desktop_config.json');
         } else {
-          console.log('\n  Added "mcp-twake-dav" in claude_desktop_config.json');
+          console.log('  Added "mcp-twake-dav" in claude_desktop_config.json');
         }
       } else {
         console.log('\n  Skipped writing. Copy the JSON above into your config manually.');
+        if (credentialsFile) {
+          console.log(`  Don't forget to create ${credentialsFile} with your credentials.`);
+        }
       }
     }
 

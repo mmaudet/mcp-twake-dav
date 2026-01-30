@@ -4,8 +4,18 @@
  * CRITICAL: HTTPS enforcement with localhost exception
  * - Production: HTTPS required to prevent credential exposure
  * - Development: localhost/127.0.0.1 allowed over HTTP
+ *
+ * Supports external credentials file via DAV_CREDENTIALS_FILE for security.
+ * The credentials file should have restricted permissions (600) and contain:
+ *   DAV_USERNAME=...
+ *   DAV_PASSWORD=...
+ * or:
+ *   DAV_TOKEN=...
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
 import { z } from 'zod';
 
 /**
@@ -74,11 +84,87 @@ export const envSchema = z.object({
 export type Config = z.infer<typeof envSchema>;
 
 /**
+ * Expand ~ to home directory in file paths
+ */
+function expandHome(filePath: string): string {
+  if (filePath.startsWith('~/')) {
+    return path.join(os.homedir(), filePath.slice(2));
+  }
+  return filePath;
+}
+
+/**
+ * Parse a .env file and return key-value pairs
+ * Supports: KEY=value, KEY="value", KEY='value', and comments (#)
+ */
+function parseEnvFile(content: string): Record<string, string> {
+  const result: Record<string, string> = {};
+
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+
+    // Skip empty lines and comments
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    // Match KEY=value pattern
+    const match = trimmed.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/i);
+    if (match) {
+      const key = match[1];
+      let value = match[2];
+
+      // Remove surrounding quotes if present
+      if ((value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Load credentials from external file if DAV_CREDENTIALS_FILE is set
+ *
+ * @returns Merged environment variables with credentials from file
+ */
+function loadCredentialsFromFile(): Record<string, string | undefined> {
+  const env = { ...process.env };
+  const credentialsFile = env.DAV_CREDENTIALS_FILE;
+
+  if (!credentialsFile) {
+    return env;
+  }
+
+  const filePath = expandHome(credentialsFile);
+
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const credentials = parseEnvFile(content);
+
+    // Merge credentials into env (credentials file takes precedence)
+    return { ...env, ...credentials };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to read credentials file "${filePath}": ${message}`);
+  }
+}
+
+/**
  * Load and validate configuration from environment variables
  *
+ * If DAV_CREDENTIALS_FILE is set, credentials are loaded from that file.
+ * This allows storing sensitive credentials separately from the main config.
+ *
  * @throws {z.ZodError} If validation fails (fail-fast)
+ * @throws {Error} If credentials file cannot be read
  * @returns Validated configuration object
  */
 export function loadConfig(): Config {
-  return envSchema.parse(process.env);
+  const env = loadCredentialsFromFile();
+  return envSchema.parse(env);
 }

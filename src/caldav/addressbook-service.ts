@@ -20,6 +20,22 @@ import { transformVCard } from '../transformers/contact.js';
 import type { ContactDTO } from '../types/dtos.js';
 
 /**
+ * Get the display name of an address book, with fallback to URL segment
+ *
+ * @param ab - Address book object
+ * @returns Display name or last URL segment
+ */
+function getAddressBookName(ab: DAVAddressBook): string {
+  if (typeof ab.displayName === 'string' && ab.displayName.trim() !== '') {
+    return ab.displayName;
+  }
+  // Extract last non-empty path segment from URL as fallback
+  const segments = ab.url.replace(/\/+$/, '').split('/');
+  const lastSegment = segments[segments.length - 1] || '';
+  return lastSegment ? decodeURIComponent(lastSegment) : ab.url;
+}
+
+/**
  * AddressBook service with CTag-based caching and retry
  *
  * Provides methods to list address books and fetch contacts with automatic
@@ -160,7 +176,7 @@ export class AddressBookService {
   async fetchContactsByAddressBookName(name: string): Promise<DAVVCard[]> {
     await this.listAddressBooks();
     const match = this.addressBooks.find(
-      (ab) => (String(ab.displayName || '')).toLowerCase() === name.toLowerCase()
+      (ab) => getAddressBookName(ab).toLowerCase() === name.toLowerCase()
     );
     if (!match) {
       this.logger.warn({ addressBookName: name }, 'Address book not found, returning empty');
@@ -216,10 +232,10 @@ export class AddressBookService {
     // Resolve target address book
     let targetAddressBook: DAVAddressBook;
     if (addressBookName) {
-      // Find by display name (case-insensitive)
+      // Find by display name or URL segment (case-insensitive)
       await this.listAddressBooks();
       const match = this.addressBooks.find(
-        (ab) => (String(ab.displayName || '')).toLowerCase() === addressBookName.toLowerCase()
+        (ab) => getAddressBookName(ab).toLowerCase() === addressBookName.toLowerCase()
       );
       if (!match) {
         throw new Error(`Address book "${addressBookName}" not found`);

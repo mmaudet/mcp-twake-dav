@@ -27,6 +27,24 @@ import { registerUpdateContactTool } from './contacts/update-contact.js';
 import { registerCheckAvailabilityTool } from './calendar/check-availability.js';
 
 /**
+ * Extract a display name from a collection (calendar or address book)
+ * Falls back to the last meaningful path segment of the URL if displayName is empty.
+ *
+ * @param obj - Object with optional displayName and url
+ * @returns A meaningful display name
+ */
+function getCollectionDisplayName(obj: { displayName?: string | Record<string, unknown>; url: string }): string {
+  if (typeof obj.displayName === 'string' && obj.displayName.trim() !== '') {
+    return obj.displayName;
+  }
+  // Extract last non-empty path segment from URL as fallback
+  // e.g. "/addressbooks/user/contacts/" → "contacts"
+  const segments = obj.url.replace(/\/+$/, '').split('/');
+  const lastSegment = segments[segments.length - 1] || '';
+  return lastSegment ? decodeURIComponent(lastSegment) : obj.url;
+}
+
+/**
  * Register all MCP tools
  *
  * Phase 4: Registers calendar query tools (CAL-01 through CAL-08)
@@ -94,7 +112,7 @@ export function registerAllTools(
         // Format as list of calendar names with URLs
         const formattedCalendars = calendars
           .map((cal) => {
-            const displayName = cal.displayName || 'Unnamed Calendar';
+            const displayName = getCollectionDisplayName(cal);
             return `${displayName}\n  URL: ${cal.url}`;
           })
           .join('\n\n');
@@ -168,7 +186,7 @@ export function registerAllTools(
         // Format as list of address book names with URLs
         const formattedAddressBooks = addressBooks
           .map((ab) => {
-            const displayName = ab.displayName || 'Unnamed Address Book';
+            const displayName = getCollectionDisplayName(ab);
             return `${displayName}\n  URL: ${ab.url}`;
           })
           .join('\n\n');

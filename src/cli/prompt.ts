@@ -30,10 +30,10 @@ export async function ask(
 }
 
 /**
- * Ask for a password with hidden input (nothing displayed while typing)
+ * Ask for a password with masked input (asterisks displayed while typing)
  *
- * Uses a temporary readline with muted output to prevent echo,
- * similar to how `sudo` handles password input.
+ * Uses raw mode to capture keystrokes individually and display asterisks.
+ * Supports backspace to delete characters.
  * Falls back to normal readline when stdin is not a TTY.
  */
 export async function askPassword(
@@ -44,27 +44,70 @@ export async function askPassword(
     return ask(rl, question);
   }
 
-  // Pause the main readline to avoid interference
+  // Close the main readline completely to avoid interference
   rl.pause();
 
-  // Create a muted output stream that discards all writes (suppresses echo)
-  const muted = new Writable({ write: (_chunk, _enc, cb) => cb() });
-
-  // Temporary readline with muted output — terminal: true enables line editing
-  const tmpRl = readline.createInterface({
-    input: stdin,
-    output: muted,
-    terminal: true,
-  });
+  // Remove all listeners from stdin to prevent readline from echoing
+  const oldListeners = stdin.listeners('data');
+  stdin.removeAllListeners('data');
 
   stdout.write(`${question}: `);
-  const answer = await tmpRl.question('');
-  tmpRl.close();
 
-  stdout.write('\n');
-  rl.resume();
+  return new Promise((resolve) => {
+    let password = '';
 
-  return answer;
+    // Enable raw mode to capture individual keystrokes (disables echo)
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf8');
+
+    const onData = (char: string) => {
+      // Handle special characters
+      switch (char) {
+        case '\r': // Enter
+        case '\n':
+          cleanup();
+          stdout.write('\n');
+          resolve(password);
+          break;
+
+        case '\u0003': // Ctrl+C
+          cleanup();
+          stdout.write('\n');
+          process.exit(0);
+          break;
+
+        case '\u007F': // Backspace (macOS/Linux)
+        case '\b':     // Backspace (Windows)
+          if (password.length > 0) {
+            password = password.slice(0, -1);
+            // Move cursor back, overwrite with space, move back again
+            stdout.write('\b \b');
+          }
+          break;
+
+        default:
+          // Only accept printable characters
+          if (char.charCodeAt(0) >= 32) {
+            password += char;
+            stdout.write('*');
+          }
+          break;
+      }
+    };
+
+    const cleanup = () => {
+      stdin.setRawMode(false);
+      stdin.removeListener('data', onData);
+      // Restore old listeners
+      for (const listener of oldListeners) {
+        stdin.on('data', listener as (...args: unknown[]) => void);
+      }
+      rl.resume();
+    };
+
+    stdin.on('data', onData);
+  });
 }
 
 /**
