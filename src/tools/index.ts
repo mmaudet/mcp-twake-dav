@@ -3,7 +3,8 @@
  *
  * Registers all calendar query tools (Phase 4), contact query tools (Phase 5),
  * calendar write tools (Phase 9), contact write tools (Phase 10),
- * and check_availability + MCP annotations (Phase 11).
+ * check_availability + MCP annotations (Phase 11),
+ * and alarm tools (add_alarm, remove_alarm) (Phase 13).
  */
 
 import { z } from 'zod';
@@ -25,6 +26,8 @@ import { registerDeleteContactTool } from './contacts/delete-contact.js';
 import { registerCreateContactTool } from './contacts/create-contact.js';
 import { registerUpdateContactTool } from './contacts/update-contact.js';
 import { registerCheckAvailabilityTool } from './calendar/check-availability.js';
+import { registerAddAlarmTool } from './calendar/add-alarm.js';
+import { registerRemoveAlarmTool } from './calendar/remove-alarm.js';
 
 /**
  * Extract a display name from a collection (calendar or address book)
@@ -52,6 +55,7 @@ function getCollectionDisplayName(obj: { displayName?: string | Record<string, u
  * Phase 9: Registers calendar write tools (CALW-01 through CALW-03)
  * Phase 10: Registers contact write tools (CONW-01 through CONW-03)
  * Phase 11: Registers check_availability (ADV-01) and MCP annotations on all tools
+ * Phase 13: Registers alarm tools (add_alarm, remove_alarm)
  *
  * @param server - MCP server instance
  * @param calendarService - Calendar service for calendar tools
@@ -80,6 +84,10 @@ export function registerAllTools(
 
   // Register check_availability tool (Phase 11)
   registerCheckAvailabilityTool(server, calendarService, logger, defaultCalendar, userTimezone);
+
+  // Register alarm tools (Phase 13)
+  registerAddAlarmTool(server, calendarService, logger, defaultCalendar);
+  registerRemoveAlarmTool(server, calendarService, logger, defaultCalendar);
 
   // Register list_calendars tool inline (CAL-05)
   server.tool(
