@@ -18,6 +18,8 @@ import {
   addAlarmToEvent,
   removeAlarmFromEvent,
   removeAllAlarmsFromEvent,
+  matchRecurrenceIdFormat,
+  createExceptionVevent,
 } from '../../src/transformers/event-builder.js';
 import type { CreateEventInput, UpdateEventInput } from '../../src/types/dtos.js';
 
@@ -719,5 +721,341 @@ describe('removeAllAlarmsFromEvent', () => {
     expect(event.summary).toBe('Event with Alarms');
     expect(event.uid).toBe('test-event-alarms');
     expect(event.startDate.toJSDate().toISOString()).toBe('2025-03-15T14:00:00.000Z');
+  });
+});
+
+describe('matchRecurrenceIdFormat', () => {
+  it('matches DATE format (isDate: true)', () => {
+    // All-day master event with DATE format
+    const masterDtstart = ICAL.Time.fromData({
+      year: 2025,
+      month: 3,
+      day: 15,
+      isDate: true,
+    });
+    const instanceDate = new Date('2025-03-17T00:00:00Z');
+
+    const result = matchRecurrenceIdFormat(masterDtstart, instanceDate);
+
+    expect(result).toBeInstanceOf(ICAL.Time);
+    expect(result.isDate).toBe(true);
+    expect(result.year).toBe(2025);
+    expect(result.month).toBe(3);
+    expect(result.day).toBe(17);
+  });
+
+  it('matches DATE-TIME with UTC (zone is UTC)', () => {
+    // Master event with UTC DATE-TIME
+    const masterDtstart = ICAL.Time.fromJSDate(new Date('2025-03-15T14:00:00Z'), true);
+
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+
+    const result = matchRecurrenceIdFormat(masterDtstart, instanceDate);
+
+    expect(result).toBeInstanceOf(ICAL.Time);
+    expect(result.isDate).toBe(false);
+    expect(result.zone.tzid).toBe('UTC');
+    expect(result.toJSDate().toISOString()).toBe('2025-03-17T14:00:00.000Z');
+  });
+
+  it('matches DATE-TIME with TZID (preserves timezone name)', () => {
+    // Master event with TZID (America/New_York)
+    const masterDtstart = ICAL.Time.fromData({
+      year: 2025,
+      month: 3,
+      day: 15,
+      hour: 10,
+      minute: 0,
+      second: 0,
+      isDate: false,
+    });
+    // Manually set timezone to simulate TZID
+    const tz = ICAL.Timezone.utcTimezone; // Use UTC as proxy for test
+    masterDtstart.zone = tz;
+
+    const instanceDate = new Date('2025-03-17T10:00:00Z');
+
+    const result = matchRecurrenceIdFormat(masterDtstart, instanceDate);
+
+    expect(result).toBeInstanceOf(ICAL.Time);
+    expect(result.isDate).toBe(false);
+    // Zone should be copied from master
+    expect(result.zone).toBe(masterDtstart.zone);
+  });
+
+  it('returns ICAL.Time object', () => {
+    const masterDtstart = ICAL.Time.fromJSDate(new Date('2025-03-15T14:00:00Z'), true);
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+
+    const result = matchRecurrenceIdFormat(masterDtstart, instanceDate);
+
+    expect(result).toBeInstanceOf(ICAL.Time);
+  });
+});
+
+describe('createExceptionVevent', () => {
+  const recurringEventRaw = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Test//EN',
+    'BEGIN:VEVENT',
+    'UID:recurring-123',
+    'DTSTAMP:20250101T120000Z',
+    'DTSTART:20250315T140000Z',
+    'DTEND:20250315T150000Z',
+    'SUMMARY:Daily Standup',
+    'RRULE:FREQ=DAILY;COUNT=10',
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    'TRIGGER:-PT15M',
+    'DESCRIPTION:Reminder',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-15T10:00:00Z'));
+  });
+
+  it('creates exception with RECURRENCE-ID matching master DTSTART format', () => {
+    const instanceDate = new Date('2025-03-17T14:00:00Z'); // 3rd instance
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, { title: 'Modified Standup' });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+
+    // Should have 2 VEVENTs: master + exception
+    expect(vevents.length).toBe(2);
+
+    // Find exception (has RECURRENCE-ID)
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+    expect(exception).toBeTruthy();
+
+    // RECURRENCE-ID should match instance date
+    const recurrenceId = exception!.getFirstProperty('recurrence-id');
+    expect(recurrenceId).toBeTruthy();
+    const recIdValue = recurrenceId!.getFirstValue() as ICAL.Time;
+    expect(recIdValue.toJSDate().toISOString()).toBe('2025-03-17T14:00:00.000Z');
+  });
+
+  it('exception has same UID as master', () => {
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, { title: 'Modified' });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+
+    // Both VEVENTs should have same UID
+    const uids = vevents.map(v => v.getFirstPropertyValue('uid'));
+    expect(uids[0]).toBe('recurring-123');
+    expect(uids[1]).toBe('recurring-123');
+  });
+
+  it('exception has NO RRULE property', () => {
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, { title: 'Modified' });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+
+    // Find exception (has RECURRENCE-ID)
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+    expect(exception).toBeTruthy();
+
+    // Exception should NOT have RRULE
+    expect(exception!.getFirstProperty('rrule')).toBeNull();
+  });
+
+  it('exception has NO RDATE property', () => {
+    // Add RDATE to master for this test
+    const rawWithRdate = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Test//EN',
+      'BEGIN:VEVENT',
+      'UID:recurring-rdate',
+      'DTSTAMP:20250101T120000Z',
+      'DTSTART:20250315T140000Z',
+      'DTEND:20250315T150000Z',
+      'SUMMARY:Event with RDATE',
+      'RRULE:FREQ=DAILY;COUNT=5',
+      'RDATE:20250320T140000Z',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const instanceDate = new Date('2025-03-16T14:00:00Z');
+    const result = createExceptionVevent(rawWithRdate, instanceDate, { title: 'Modified' });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+
+    expect(exception!.getFirstProperty('rdate')).toBeNull();
+  });
+
+  it('exception has NO EXDATE property', () => {
+    // Add EXDATE to master for this test
+    const rawWithExdate = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Test//EN',
+      'BEGIN:VEVENT',
+      'UID:recurring-exdate',
+      'DTSTAMP:20250101T120000Z',
+      'DTSTART:20250315T140000Z',
+      'DTEND:20250315T150000Z',
+      'SUMMARY:Event with EXDATE',
+      'RRULE:FREQ=DAILY;COUNT=5',
+      'EXDATE:20250318T140000Z',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const instanceDate = new Date('2025-03-16T14:00:00Z');
+    const result = createExceptionVevent(rawWithExdate, instanceDate, { title: 'Modified' });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+
+    expect(exception!.getFirstProperty('exdate')).toBeNull();
+  });
+
+  it('exception applies title change', () => {
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, { title: 'Special Standup' });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+
+    expect(exception!.getFirstPropertyValue('summary')).toBe('Special Standup');
+  });
+
+  it('exception applies start/end change (rescheduled instance)', () => {
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+    const newStart = new Date('2025-03-17T16:00:00Z'); // Rescheduled 2 hours later
+    const newEnd = new Date('2025-03-17T17:00:00Z');
+
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, {
+      start: newStart,
+      end: newEnd,
+    });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+
+    const dtstart = exception!.getFirstProperty('dtstart')!.getFirstValue() as ICAL.Time;
+    const dtend = exception!.getFirstProperty('dtend')!.getFirstValue() as ICAL.Time;
+
+    expect(dtstart.toJSDate().toISOString()).toBe('2025-03-17T16:00:00.000Z');
+    expect(dtend.toJSDate().toISOString()).toBe('2025-03-17T17:00:00.000Z');
+  });
+
+  it('exception clones VALARMs from master (default behavior)', () => {
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, { title: 'Modified' });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+
+    // Exception should have cloned VALARM
+    const alarms = exception!.getAllSubcomponents('valarm');
+    expect(alarms.length).toBe(1);
+    expect(alarms[0].getFirstPropertyValue('action')).toBe('DISPLAY');
+    expect(alarms[0].getFirstPropertyValue('trigger').toString()).toBe('-PT15M');
+    expect(alarms[0].getFirstPropertyValue('description')).toBe('Reminder');
+  });
+
+  it('exception skips VALARM clone when cloneAlarms: false', () => {
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, { title: 'Modified' }, { cloneAlarms: false });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+
+    // Exception should NOT have VALARM
+    const alarms = exception!.getAllSubcomponents('valarm');
+    expect(alarms.length).toBe(0);
+  });
+
+  it('master VEVENT remains unchanged (two VEVENTs in result)', () => {
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, { title: 'Modified' });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+
+    // Should have 2 VEVENTs
+    expect(vevents.length).toBe(2);
+
+    // Find master (NO RECURRENCE-ID)
+    const master = vevents.find(v => !v.getFirstProperty('recurrence-id'));
+    expect(master).toBeTruthy();
+
+    // Master should still have RRULE
+    expect(master!.getFirstProperty('rrule')).toBeTruthy();
+
+    // Master should still have original title
+    expect(master!.getFirstPropertyValue('summary')).toBe('Daily Standup');
+
+    // Master should still have VALARM
+    const masterAlarms = master!.getAllSubcomponents('valarm');
+    expect(masterAlarms.length).toBe(1);
+  });
+
+  it('RECURRENCE-ID value is original instance date (not new time)', () => {
+    const instanceDate = new Date('2025-03-17T14:00:00Z'); // Original instance time
+    const newStart = new Date('2025-03-17T16:00:00Z'); // Rescheduled time
+
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, {
+      start: newStart,
+      end: new Date('2025-03-17T17:00:00Z'),
+    });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+
+    // RECURRENCE-ID should be ORIGINAL instance date, not new start time
+    const recIdValue = exception!.getFirstProperty('recurrence-id')!.getFirstValue() as ICAL.Time;
+    expect(recIdValue.toJSDate().toISOString()).toBe('2025-03-17T14:00:00.000Z');
+
+    // DTSTART should be the NEW time
+    const dtstartValue = exception!.getFirstProperty('dtstart')!.getFirstValue() as ICAL.Time;
+    expect(dtstartValue.toJSDate().toISOString()).toBe('2025-03-17T16:00:00.000Z');
+  });
+
+  it('exception has fresh DTSTAMP', () => {
+    vi.setSystemTime(new Date('2025-02-01T12:00:00Z'));
+
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, { title: 'Modified' });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+
+    const dtstamp = exception!.getFirstProperty('dtstamp')!.getFirstValue() as ICAL.Time;
+    // Should be current time (2025-02-01T12:00:00Z), not original (2025-01-01T12:00:00Z)
+    expect(dtstamp.toJSDate().toISOString()).toBe('2025-02-01T12:00:00.000Z');
+  });
+
+  it('exception has SEQUENCE:0', () => {
+    const instanceDate = new Date('2025-03-17T14:00:00Z');
+    const result = createExceptionVevent(recurringEventRaw, instanceDate, { title: 'Modified' });
+
+    const comp = new ICAL.Component(ICAL.parse(result));
+    const vevents = comp.getAllSubcomponents('vevent');
+    const exception = vevents.find(v => v.getFirstProperty('recurrence-id'));
+
+    const sequence = exception!.getFirstPropertyValue('sequence');
+    expect(sequence).toBe(0);
   });
 });

@@ -355,3 +355,201 @@ export function removeAllAlarmsFromEvent(raw: string): string {
   // Return serialized iCalendar
   return comp.toString();
 }
+
+/**
+ * Match RECURRENCE-ID format to master DTSTART format
+ *
+ * Creates an ICAL.Time for RECURRENCE-ID that matches the master event's DTSTART:
+ * - If master is DATE (all-day), result is DATE
+ * - If master is DATE-TIME with timezone, result preserves that timezone
+ * - If master is DATE-TIME with UTC (Z suffix), result is UTC
+ *
+ * CRITICAL: RECURRENCE-ID format MUST match master DTSTART exactly per RFC 5545.
+ *
+ * @param masterDtstart - The master event's DTSTART as ICAL.Time
+ * @param instanceDate - The specific instance date to identify
+ * @returns ICAL.Time with format matching master DTSTART
+ */
+export function matchRecurrenceIdFormat(masterDtstart: ICAL.Time, instanceDate: Date): ICAL.Time {
+  if (masterDtstart.isDate) {
+    // All-day event: DATE format (no time component)
+    return ICAL.Time.fromData({
+      year: instanceDate.getUTCFullYear(),
+      month: instanceDate.getUTCMonth() + 1,
+      day: instanceDate.getUTCDate(),
+      isDate: true,
+    });
+  }
+
+  // DATE-TIME format: create from UTC components to preserve exact time
+  // Then apply master's timezone
+  const time = ICAL.Time.fromData({
+    year: instanceDate.getUTCFullYear(),
+    month: instanceDate.getUTCMonth() + 1,
+    day: instanceDate.getUTCDate(),
+    hour: instanceDate.getUTCHours(),
+    minute: instanceDate.getUTCMinutes(),
+    second: instanceDate.getUTCSeconds(),
+    isDate: false,
+  });
+
+  // Apply timezone from master DTSTART
+  if (masterDtstart.zone) {
+    time.zone = masterDtstart.zone;
+  }
+  return time;
+}
+
+/**
+ * Create exception VEVENT for a single recurring instance
+ *
+ * Creates a new VEVENT with RECURRENCE-ID that overrides a specific instance
+ * of a recurring event. The exception is added to the same VCALENDAR as the master.
+ *
+ * CRITICAL constraints:
+ * - Exception has RECURRENCE-ID matching master DTSTART format
+ * - Exception has same UID as master
+ * - Exception has NO RRULE, RDATE, EXDATE (only master has these)
+ * - VALARMs must be explicitly cloned (exceptions don't inherit)
+ * - RECURRENCE-ID value is ORIGINAL instance date, not rescheduled time
+ *
+ * @param raw - Existing iCalendar string containing master VEVENT
+ * @param instanceDate - The original instance date being modified
+ * @param changes - Properties to apply to the exception (UpdateEventInput)
+ * @param options - Optional settings (cloneAlarms: boolean, default true)
+ * @returns iCalendar string with both master and exception VEVENTs
+ */
+export function createExceptionVevent(
+  raw: string,
+  instanceDate: Date,
+  changes: UpdateEventInput,
+  options?: { cloneAlarms?: boolean }
+): string {
+  // Parse existing iCalendar
+  const jCalData = ICAL.parse(raw);
+  const comp = new ICAL.Component(jCalData);
+
+  // Get master VEVENT component
+  const masterVevent = comp.getFirstSubcomponent('vevent');
+  if (!masterVevent) {
+    throw new Error('No VEVENT component found in iCalendar data');
+  }
+
+  // Extract master properties
+  const masterUid = masterVevent.getFirstPropertyValue('uid');
+  const masterDtstart = masterVevent.getFirstProperty('dtstart')?.getFirstValue() as ICAL.Time;
+  const masterDtend = masterVevent.getFirstProperty('dtend')?.getFirstValue() as ICAL.Time;
+  const masterSummary = masterVevent.getFirstPropertyValue('summary');
+  const masterDescription = masterVevent.getFirstPropertyValue('description');
+  const masterLocation = masterVevent.getFirstPropertyValue('location');
+  const masterAlarms = masterVevent.getAllSubcomponents('valarm');
+
+  // Create new exception VEVENT
+  const exceptionVevent = new ICAL.Component('vevent');
+
+  // Set UID (same as master)
+  exceptionVevent.updatePropertyWithValue('uid', masterUid);
+
+  // Set RECURRENCE-ID (identifies which instance is being overridden)
+  const recurrenceId = matchRecurrenceIdFormat(masterDtstart, instanceDate);
+  exceptionVevent.updatePropertyWithValue('recurrence-id', recurrenceId);
+
+  // Set DTSTAMP (current time)
+  exceptionVevent.updatePropertyWithValue('dtstamp', ICAL.Time.now());
+
+  // Set SEQUENCE:0 for new exception
+  exceptionVevent.updatePropertyWithValue('sequence', 0);
+
+  // Apply DTSTART - if no start change, use the original instance time
+  if (changes.start !== undefined) {
+    const startDate = typeof changes.start === 'string'
+      ? new Date(changes.start)
+      : changes.start;
+    // Create from UTC components to preserve exact time
+    const startTime = ICAL.Time.fromData({
+      year: startDate.getUTCFullYear(),
+      month: startDate.getUTCMonth() + 1,
+      day: startDate.getUTCDate(),
+      hour: startDate.getUTCHours(),
+      minute: startDate.getUTCMinutes(),
+      second: startDate.getUTCSeconds(),
+      isDate: false,
+    });
+    if (masterDtstart.zone) {
+      startTime.zone = masterDtstart.zone;
+    }
+    exceptionVevent.updatePropertyWithValue('dtstart', startTime);
+  } else {
+    // Use instance date as DTSTART (same time as original occurrence)
+    const startTime = matchRecurrenceIdFormat(masterDtstart, instanceDate);
+    exceptionVevent.updatePropertyWithValue('dtstart', startTime);
+  }
+
+  // Apply DTEND - if no end change, calculate from master duration
+  if (changes.end !== undefined) {
+    const endDate = typeof changes.end === 'string'
+      ? new Date(changes.end)
+      : changes.end;
+    // Create from UTC components to preserve exact time
+    const endTime = ICAL.Time.fromData({
+      year: endDate.getUTCFullYear(),
+      month: endDate.getUTCMonth() + 1,
+      day: endDate.getUTCDate(),
+      hour: endDate.getUTCHours(),
+      minute: endDate.getUTCMinutes(),
+      second: endDate.getUTCSeconds(),
+      isDate: false,
+    });
+    if (masterDtstart.zone) {
+      endTime.zone = masterDtstart.zone;
+    }
+    exceptionVevent.updatePropertyWithValue('dtend', endTime);
+  } else if (masterDtend) {
+    // Calculate duration from master and apply to instance
+    const masterDuration = masterDtend.subtractDate(masterDtstart);
+    const exceptionDtstart = exceptionVevent.getFirstProperty('dtstart')?.getFirstValue() as ICAL.Time;
+    const exceptionDtend = exceptionDtstart.clone();
+    exceptionDtend.addDuration(masterDuration);
+    exceptionVevent.updatePropertyWithValue('dtend', exceptionDtend);
+  }
+
+  // Apply SUMMARY - use change or master value
+  if (changes.title !== undefined) {
+    exceptionVevent.updatePropertyWithValue('summary', changes.title);
+  } else if (masterSummary) {
+    exceptionVevent.updatePropertyWithValue('summary', masterSummary);
+  }
+
+  // Apply DESCRIPTION - use change or master value
+  if (changes.description !== undefined) {
+    exceptionVevent.updatePropertyWithValue('description', changes.description);
+  } else if (masterDescription) {
+    exceptionVevent.updatePropertyWithValue('description', masterDescription);
+  }
+
+  // Apply LOCATION - use change or master value
+  if (changes.location !== undefined) {
+    exceptionVevent.updatePropertyWithValue('location', changes.location);
+  } else if (masterLocation) {
+    exceptionVevent.updatePropertyWithValue('location', masterLocation);
+  }
+
+  // CRITICAL: Do NOT set RRULE, RDATE, EXDATE on exception
+  // These properties are only on the master VEVENT
+
+  // Clone VALARMs from master if cloneAlarms !== false (default: true)
+  if (options?.cloneAlarms !== false && masterAlarms.length > 0) {
+    for (const alarm of masterAlarms) {
+      // Clone the alarm by converting to jCal and back
+      const alarmJCal = alarm.toJSON();
+      const clonedAlarm = new ICAL.Component(alarmJCal);
+      exceptionVevent.addSubcomponent(clonedAlarm);
+    }
+  }
+
+  // Add exception VEVENT to VCALENDAR
+  comp.addSubcomponent(exceptionVevent);
+
+  // Return serialized iCalendar (master + exception)
+  return comp.toString();
+}
