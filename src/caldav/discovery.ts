@@ -62,3 +62,59 @@ export async function discoverAddressBooks(client: DAVClientType, logger: Logger
     throw err;
   }
 }
+
+/**
+ * Discover the scheduling inbox URL from the principal
+ *
+ * Executes PROPFIND on the principal URL to find schedule-inbox-URL property.
+ * Returns null if server doesn't support RFC 6638 scheduling extensions.
+ *
+ * @param client - CalDAV client instance
+ * @param principalUrl - User's principal URL (e.g., "/principals/users/user@example.com/")
+ * @param logger - Logger instance for info/debug/error messages
+ * @returns Scheduling inbox URL or null if not supported
+ */
+export async function discoverSchedulingInbox(
+  client: DAVClientType,
+  principalUrl: string,
+  logger: Logger
+): Promise<string | null> {
+  try {
+    const response = await client.propfind({
+      url: principalUrl,
+      depth: '0',
+      props: {
+        propfind: {
+          _attributes: {
+            'xmlns:d': 'DAV:',
+            'xmlns:c': 'urn:ietf:params:xml:ns:caldav',
+          },
+          prop: {
+            'c:schedule-inbox-URL': {},
+          },
+        },
+      },
+    });
+
+    // tsdav camelCases property names: schedule-inbox-URL becomes scheduleInboxURL
+    // Response structure: response[0]?.props?.scheduleInboxURL?.href
+    const inboxHref = response?.[0]?.props?.scheduleInboxURL?.href;
+
+    if (!inboxHref) {
+      logger.warn({ principalUrl }, 'Scheduling inbox not found (server may not support RFC 6638)');
+      return null;
+    }
+
+    logger.debug({ principalUrl, inboxUrl: inboxHref }, 'Discovered scheduling inbox URL');
+    return inboxHref;
+  } catch (err: any) {
+    // Handle 404 or other errors gracefully - not all servers support scheduling
+    if (err?.status === 404 || err?.statusCode === 404) {
+      logger.warn({ principalUrl }, 'Principal not found (404) - scheduling not supported');
+      return null;
+    }
+
+    logger.warn({ principalUrl, err }, 'Failed to discover scheduling inbox - returning null');
+    return null;
+  }
+}
