@@ -10,7 +10,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Logger } from 'pino';
 import type { CalendarService } from '../../caldav/calendar-service.js';
 import { ConflictError } from '../../errors.js';
-import { updateICalString } from '../../transformers/event-builder.js';
+import { updateICalString, createExceptionVevent } from '../../transformers/event-builder.js';
 import * as chrono from 'chrono-node';
 import ICAL from 'ical.js';
 
@@ -30,7 +30,7 @@ export function registerUpdateEventTool(
 ): void {
   server.tool(
     'update_event',
-    'Update an existing calendar event by UID. Modifies only the specified fields while preserving all other properties (alarms, attendees, custom fields). IMPORTANT: Confirm with the user before proceeding. Show the user what will change and ask them to confirm before updating.',
+    'Update an existing calendar event by UID. Modifies only the specified fields while preserving all other properties (alarms, attendees, custom fields). For recurring events, you can modify a single occurrence by specifying instanceDate. IMPORTANT: For recurring events, ask the user "Do you want to update this occurrence only, or all events in the series?" before proceeding. Confirm with the user before proceeding. Show the user what will change and ask them to confirm before updating.',
     {
       uid: z.string().describe('The UID of the event to update. Use search_events or get_todays_schedule to find event UIDs.'),
       title: z.string().optional().describe('New event title/summary'),
@@ -41,6 +41,11 @@ export function registerUpdateEventTool(
       calendar: z.string().optional().describe(
         'Calendar name to search in. Use "all" to search all calendars. ' +
         (defaultCalendar ? `Defaults to "${defaultCalendar}".` : 'Defaults to all calendars.')
+      ),
+      instanceDate: z.string().optional().describe(
+        'For recurring events only: the specific occurrence date to modify (e.g., "2026-02-05", "Tuesday"). ' +
+        'When provided, only that occurrence is changed (creates exception). ' +
+        'When omitted, the ENTIRE recurring series is modified.'
       ),
     },
     {
@@ -164,6 +169,131 @@ export function registerUpdateEventTool(
               isError: true,
             };
           }
+        }
+
+        // Handle single instance modification for recurring events
+        if (params.instanceDate !== undefined) {
+          // Validate event is recurring
+          if (!event.isRecurring) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `Cannot use instanceDate on non-recurring event. This event does not repeat.`,
+              }],
+              isError: true,
+            };
+          }
+
+          // Parse instanceDate using chrono-node
+          const chronoInstanceDate = chrono.parseDate(params.instanceDate);
+          let parsedInstanceDate: Date;
+          if (chronoInstanceDate) {
+            parsedInstanceDate = chronoInstanceDate;
+          } else {
+            parsedInstanceDate = new Date(params.instanceDate);
+            if (isNaN(parsedInstanceDate.getTime())) {
+              return {
+                content: [{
+                  type: 'text' as const,
+                  text: `Could not parse instanceDate: "${params.instanceDate}". Use natural language (e.g., "Tuesday", "next Friday") or ISO 8601 format.`,
+                }],
+                isError: true,
+              };
+            }
+          }
+
+          // Build changes object for exception
+          const exceptionChanges: {
+            title?: string;
+            start?: Date;
+            end?: Date;
+            description?: string;
+            location?: string;
+          } = {};
+
+          if (params.title !== undefined) {
+            exceptionChanges.title = params.title;
+          }
+          if (newStartDate !== undefined) {
+            exceptionChanges.start = newStartDate;
+          }
+          if (newEndDate !== undefined) {
+            exceptionChanges.end = newEndDate;
+          }
+          if (params.description !== undefined) {
+            exceptionChanges.description = params.description;
+          }
+          if (params.location !== undefined) {
+            exceptionChanges.location = params.location;
+          }
+
+          // Create exception VEVENT (cloneAlarms defaults to true - RINST-03)
+          const updatedICalString = createExceptionVevent(
+            event._raw,
+            parsedInstanceDate,
+            exceptionChanges
+            // cloneAlarms: true is the default - preserves VALARMs from master
+          );
+
+          // VALARM verification (RINST-03 defensive check)
+          const jCalData = ICAL.parse(updatedICalString);
+          const comp = new ICAL.Component(jCalData);
+          const vevents = comp.getAllSubcomponents('vevent');
+
+          // Find master and exception
+          const masterVevent = vevents.find(v => !v.getFirstProperty('recurrence-id'));
+          const exceptionVevent = vevents.find(v => v.getFirstProperty('recurrence-id'));
+
+          if (masterVevent && exceptionVevent) {
+            const masterAlarmCount = masterVevent.getAllSubcomponents('valarm').length;
+            const exceptionAlarmCount = exceptionVevent.getAllSubcomponents('valarm').length;
+            if (masterAlarmCount > 0 && exceptionAlarmCount !== masterAlarmCount) {
+              logger.warn(
+                { masterAlarmCount, exceptionAlarmCount },
+                'VALARM count mismatch - alarms may not have been cloned correctly'
+              );
+            }
+          }
+
+          // Check for attendees and prepare warning
+          let attendeeWarning = '';
+          if (event.attendees.length > 0) {
+            const attendeeList = event.attendees.join(', ');
+            attendeeWarning = `\n\nNote: This event has attendees (${attendeeList}). The server may send update notifications.`;
+          }
+
+          // Update event with exception added
+          await calendarService.updateEvent(event.url, updatedICalString, event.etag!);
+
+          // Build list of changed fields for response
+          const changedFields: string[] = [];
+          if (params.title !== undefined) {
+            changedFields.push(`title: "${params.title}"`);
+          }
+          if (params.start !== undefined) {
+            changedFields.push(`start: ${newStartDate!.toLocaleString()}`);
+          }
+          if (params.end !== undefined) {
+            changedFields.push(`end: ${newEndDate!.toLocaleString()}`);
+          }
+          if (params.description !== undefined) {
+            changedFields.push(`description: "${params.description}"`);
+          }
+          if (params.location !== undefined) {
+            changedFields.push(`location: "${params.location}"`);
+          }
+
+          logger.info(
+            { uid: params.uid, instanceDate: parsedInstanceDate.toISOString(), changes: changedFields },
+            'Single occurrence modified (exception created)'
+          );
+
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `Occurrence modified: ${event.summary} on ${parsedInstanceDate.toLocaleDateString()}\nChanges: ${changedFields.join(', ')}\n\nOnly this occurrence was updated; the rest of the series is unchanged.${attendeeWarning}`,
+            }],
+          };
         }
 
         // RRULE safety check: store original RRULE if event is recurring
