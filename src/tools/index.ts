@@ -4,7 +4,8 @@
  * Registers all calendar query tools (Phase 4), contact query tools (Phase 5),
  * calendar write tools (Phase 9), contact write tools (Phase 10),
  * check_availability + MCP annotations (Phase 11),
- * and alarm tools (add_alarm, remove_alarm) (Phase 13).
+ * alarm tools (add_alarm, remove_alarm) (Phase 13),
+ * and invitation tools (list_invitations, respond_to_invitation) (Phase 16).
  */
 
 import { z } from 'zod';
@@ -28,6 +29,8 @@ import { registerUpdateContactTool } from './contacts/update-contact.js';
 import { registerCheckAvailabilityTool } from './calendar/check-availability.js';
 import { registerAddAlarmTool } from './calendar/add-alarm.js';
 import { registerRemoveAlarmTool } from './calendar/remove-alarm.js';
+import { registerListInvitationsTool } from './calendar/list-invitations.js';
+import { registerRespondInvitationTool } from './calendar/respond-invitation.js';
 
 /**
  * Extract a display name from a collection (calendar or address book)
@@ -56,6 +59,7 @@ function getCollectionDisplayName(obj: { displayName?: string | Record<string, u
  * Phase 10: Registers contact write tools (CONW-01 through CONW-03)
  * Phase 11: Registers check_availability (ADV-01) and MCP annotations on all tools
  * Phase 13: Registers alarm tools (add_alarm, remove_alarm)
+ * Phase 16: Registers invitation tools (list_invitations, respond_to_invitation)
  *
  * @param server - MCP server instance
  * @param calendarService - Calendar service for calendar tools
@@ -70,6 +74,7 @@ export function registerAllTools(
   defaultCalendar?: string,
   defaultAddressBook?: string,
   userTimezone?: string,
+  config?: { DAV_USERNAME?: string },
 ): void {
   // Register calendar query tools (Phase 4)
   registerNextEventTool(server, calendarService, logger, defaultCalendar, userTimezone);
@@ -88,6 +93,10 @@ export function registerAllTools(
   // Register alarm tools (Phase 13)
   registerAddAlarmTool(server, calendarService, logger, defaultCalendar);
   registerRemoveAlarmTool(server, calendarService, logger, defaultCalendar);
+
+  // Register invitation tools (Phase 16)
+  registerListInvitationsTool(server, calendarService, logger, userTimezone);
+  registerRespondInvitationTool(server, calendarService, logger, config || {});
 
   // Register list_calendars tool inline (CAL-05)
   server.tool(

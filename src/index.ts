@@ -49,7 +49,7 @@ async function main() {
     logger.info('Calendar and AddressBook services initialized');
 
     // Step 6: Initialize MCP server with tools registered
-    const server = createServer(calendarService, addressBookService, logger, config.DAV_DEFAULT_CALENDAR, config.DAV_DEFAULT_ADDRESSBOOK, config.USER_TIMEZONE);
+    const server = createServer(calendarService, addressBookService, logger, config.DAV_DEFAULT_CALENDAR, config.DAV_DEFAULT_ADDRESSBOOK, config.USER_TIMEZONE, { DAV_USERNAME: config.DAV_USERNAME });
     logger.info('MCP server initialized');
 
     // Step 7: Connect stdio transport

@@ -77,11 +77,11 @@ describe('MCP Tool Registration', () => {
     await serverTransport.close();
   });
 
-  it('should register all 18 tools', async () => {
+  it('should register all 20 tools', async () => {
     const response = await client.listTools();
 
     expect(response.tools).toBeDefined();
-    expect(response.tools).toHaveLength(18);
+    expect(response.tools).toHaveLength(20);
   });
 
   it('should register tools with correct names', async () => {
@@ -102,7 +102,9 @@ describe('MCP Tool Registration', () => {
       'list_addressbooks',
       'list_calendars',
       'list_contacts',
+      'list_invitations',
       'remove_alarm',
+      'respond_to_invitation',
       'search_contacts',
       'search_events',
       'update_contact',
@@ -357,6 +359,7 @@ describe('MCP Tool Registration', () => {
       'list_addressbooks',
       'list_calendars',
       'list_contacts',
+      'list_invitations',
       'search_contacts',
       'search_events',
     ];
@@ -386,6 +389,7 @@ describe('MCP Tool Registration', () => {
       'update_event', 'delete_event',
       'update_contact', 'delete_contact',
       'remove_alarm',
+      'respond_to_invitation',
     ];
 
     for (const name of destructiveToolNames) {
@@ -406,7 +410,7 @@ describe('MCP Tool Registration', () => {
 
   it('should include confirmation instruction in all write tool descriptions', async () => {
     const response = await client.listTools();
-    const writeToolNames = ['create_event', 'update_event', 'delete_event', 'create_contact', 'update_contact', 'delete_contact', 'add_alarm', 'remove_alarm'];
+    const writeToolNames = ['create_event', 'update_event', 'delete_event', 'create_contact', 'update_contact', 'delete_contact', 'add_alarm', 'remove_alarm', 'respond_to_invitation'];
 
     for (const name of writeToolNames) {
       const tool = response.tools.find((t) => t.name === name);
