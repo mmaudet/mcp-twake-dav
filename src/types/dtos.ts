@@ -233,3 +233,45 @@ export interface FreeBusyResult {
   /** List of busy periods within the range */
   periods: FreeBusyPeriod[];
 }
+
+// ============================================================================
+// Invitation DTOs (v3.0)
+// ============================================================================
+
+/**
+ * Organizer information from ORGANIZER property
+ */
+export interface OrganizerInfo {
+  /** Display name from CN parameter */
+  name: string;
+  /** Email address from mailto: value */
+  email: string;
+}
+
+/**
+ * Pending calendar invitation from scheduling inbox
+ *
+ * Represents an event awaiting user response (PARTSTAT=NEEDS-ACTION)
+ */
+export interface InvitationDTO {
+  /** Unique identifier from VEVENT UID property */
+  uid: string;
+  /** Event title from SUMMARY property */
+  summary: string;
+  /** Organizer who sent the invitation */
+  organizer: OrganizerInfo;
+  /** Proposed start date/time */
+  proposedStart: Date;
+  /** Proposed end date/time */
+  proposedEnd: Date;
+  /** Event location if provided */
+  location?: string;
+  /** Current user's participation status */
+  userPartstat: string;
+  /** CalDAV object URL for responding */
+  url: string;
+  /** HTTP ETag for optimistic concurrency */
+  etag: string;
+  /** Original iCalendar text for response updates */
+  _raw: string;
+}
