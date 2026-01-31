@@ -31,8 +31,14 @@ mcp-twake-dav is a Model Context Protocol (MCP) server that connects any MCP-com
 
 **Calendar Write Tools:**
 - `create_event` - Create a new calendar event (with optional recurrence)
-- `update_event` - Update an existing event (partial updates supported)
-- `delete_event` - Delete an event by UID
+- `update_event` - Update an existing event (partial updates, single occurrence editing)
+- `delete_event` - Delete an event by UID (or single occurrence of recurring event)
+- `add_alarm` - Add a reminder to an event (natural language: "15 minutes", "1 hour", "1 day")
+- `remove_alarm` - Remove a reminder from an event
+
+**Invitation Management:**
+- `list_invitations` - List pending calendar invitations awaiting your response
+- `respond_to_invitation` - Accept, decline, or tentatively accept an invitation
 
 **Contact Read Tools:**
 - `search_contacts` - Search contacts by name or organization
@@ -49,6 +55,9 @@ mcp-twake-dav is a Model Context Protocol (MCP) server that connects any MCP-com
 - Event status display (CANCELLED, TENTATIVE events clearly marked)
 - Attendee participation status (ACCEPTED, DECLINED, TENTATIVE, NEEDS-ACTION)
 - Recurring event expansion (RRULE support with safety limits)
+- Single occurrence editing (modify or delete individual occurrences of recurring events)
+- VALARM reminder management (add/remove alarms with natural language triggers)
+- RFC 6638 scheduling inbox support (list and respond to invitations)
 - Multi-calendar and multi-addressbook search
 - CTag-based caching for improved performance
 - Natural language date parsing (powered by chrono-node)
@@ -265,6 +274,16 @@ Once configured, you can ask Claude natural language questions about your calend
 - "Move my 3pm meeting to 4pm"
 - "Delete the team sync event"
 - "Add a weekly standup every Monday at 9am"
+- "Add a 15 minute reminder to my dentist appointment"
+- "Remove the reminder from tomorrow's meeting"
+- "Move only Tuesday's standup to 10am" (single occurrence)
+- "Cancel just Friday's team meeting" (single occurrence)
+
+**Invitation management:**
+- "Do I have any pending invitations?"
+- "Accept the team meeting invitation"
+- "Decline the conference call"
+- "Tentatively accept the lunch meeting"
 
 **Contact queries:**
 - "What's Marie's email address?"
@@ -290,8 +309,12 @@ Once configured, you can ask Claude natural language questions about your calend
 | `check_availability` | Check free/busy availability for a time range. Optional `calendar` filter |
 | `list_calendars` | List all available calendars |
 | `create_event` | Create a new event with title, start, end, and optional recurrence |
-| `update_event` | Update an existing event by UID (partial updates) |
-| `delete_event` | Delete an event by UID |
+| `update_event` | Update an existing event by UID (partial updates, single occurrence with `instanceDate`) |
+| `delete_event` | Delete an event by UID (or single occurrence with `instanceDate`) |
+| `add_alarm` | Add a reminder to an event (natural language trigger: "15m", "1h", "1d") |
+| `remove_alarm` | Remove a reminder from an event by index or remove all |
+| `list_invitations` | List pending calendar invitations awaiting response |
+| `respond_to_invitation` | Accept, decline, or tentatively accept an invitation by UID |
 | `search_contacts` | Search contacts by name or organization. Optional `addressbook` filter |
 | `get_contact_details` | Get full details for a contact by name. Optional `addressbook` filter |
 | `list_contacts` | List contacts (limited to 30). Optional `addressbook` filter |
@@ -369,7 +392,7 @@ mcp-twake-dav is built with a layered architecture:
 4. **Infrastructure Layer** - Retry logic with exponential backoff and jitter, CTag-based caching for performance optimization
 5. **Service Layer** - CalendarService and AddressBookService with resource fetching and caching management
 6. **Transformation Layer** - iCal.js-based parsing of iCalendar and vCard formats, timezone normalization, RRULE expansion, parse-modify-serialize for updates
-7. **MCP Tool Layer** - 16 MCP tools exposing calendar and contact read/write functionality with natural language support and tool annotations
+7. **MCP Tool Layer** - 20 MCP tools exposing calendar and contact read/write functionality with natural language support and tool annotations
 8. **Entry Point** - MCP server initialization with stdio transport
 
 **Key design decisions:**
