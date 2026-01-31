@@ -20,6 +20,7 @@ import {
   removeAllAlarmsFromEvent,
   matchRecurrenceIdFormat,
   createExceptionVevent,
+  addExdateToEvent,
 } from '../../src/transformers/event-builder.js';
 import type { CreateEventInput, UpdateEventInput } from '../../src/types/dtos.js';
 
@@ -1057,5 +1058,113 @@ describe('createExceptionVevent', () => {
 
     const sequence = exception!.getFirstPropertyValue('sequence');
     expect(sequence).toBe(0);
+  });
+});
+
+describe('addExdateToEvent', () => {
+  it('should add EXDATE property to master VEVENT', () => {
+    const raw = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:recurring-123
+DTSTART:20260201T100000Z
+DTEND:20260201T110000Z
+RRULE:FREQ=DAILY;COUNT=10
+SUMMARY:Daily Standup
+END:VEVENT
+END:VCALENDAR`;
+    const instanceDate = new Date('2026-02-05T10:00:00Z');
+    const result = addExdateToEvent(raw, instanceDate);
+
+    const jCalData = ICAL.parse(result);
+    const comp = new ICAL.Component(jCalData);
+    const vevent = comp.getFirstSubcomponent('vevent');
+    const exdateProp = vevent!.getFirstProperty('exdate');
+    expect(exdateProp).toBeDefined();
+    // Should match DTSTART format (DATE-TIME with Z)
+    expect((exdateProp!.getFirstValue() as ICAL.Time).toICALString()).toBe('20260205T100000Z');
+  });
+
+  it('should preserve existing EXDATE values (multiple exclusions)', () => {
+    const raw = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:recurring-123
+DTSTART:20260201T100000Z
+DTEND:20260201T110000Z
+RRULE:FREQ=DAILY;COUNT=10
+EXDATE:20260203T100000Z
+SUMMARY:Daily Standup
+END:VEVENT
+END:VCALENDAR`;
+    const instanceDate = new Date('2026-02-05T10:00:00Z');
+    const result = addExdateToEvent(raw, instanceDate);
+
+    const jCalData = ICAL.parse(result);
+    const comp = new ICAL.Component(jCalData);
+    const vevent = comp.getFirstSubcomponent('vevent');
+    const exdateProps = vevent!.getAllProperties('exdate');
+    // Should have 2 EXDATE properties
+    expect(exdateProps.length).toBe(2);
+  });
+
+  it('should match EXDATE format to DTSTART DATE format (all-day events)', () => {
+    const raw = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:allday-123
+DTSTART;VALUE=DATE:20260201
+DTEND;VALUE=DATE:20260202
+RRULE:FREQ=WEEKLY;COUNT=10
+SUMMARY:Weekly Review
+END:VEVENT
+END:VCALENDAR`;
+    const instanceDate = new Date('2026-02-08');
+    const result = addExdateToEvent(raw, instanceDate);
+
+    const jCalData = ICAL.parse(result);
+    const comp = new ICAL.Component(jCalData);
+    const vevent = comp.getFirstSubcomponent('vevent');
+    const exdateProp = vevent!.getFirstProperty('exdate');
+    const exdateValue = exdateProp!.getFirstValue() as ICAL.Time;
+    expect(exdateValue.isDate).toBe(true);
+    expect(exdateValue.toICALString()).toBe('20260208');
+  });
+
+  it('should match EXDATE format to DTSTART with timezone', () => {
+    const raw = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VTIMEZONE
+TZID:Europe/Paris
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:tz-123
+DTSTART;TZID=Europe/Paris:20260201T100000
+DTEND;TZID=Europe/Paris:20260201T110000
+RRULE:FREQ=DAILY;COUNT=10
+SUMMARY:Paris Standup
+END:VEVENT
+END:VCALENDAR`;
+    const instanceDate = new Date('2026-02-05T09:00:00Z'); // 10:00 Paris time
+    const result = addExdateToEvent(raw, instanceDate);
+
+    const jCalData = ICAL.parse(result);
+    const comp = new ICAL.Component(jCalData);
+    const vevent = comp.getFirstSubcomponent('vevent');
+    const exdateProp = vevent!.getFirstProperty('exdate');
+    // Should have TZID parameter matching DTSTART
+    expect(exdateProp!.getParameter('tzid')).toBe('Europe/Paris');
+  });
+
+  it('should throw error if no VEVENT found', () => {
+    const raw = `BEGIN:VCALENDAR
+VERSION:2.0
+END:VCALENDAR`;
+    const instanceDate = new Date('2026-02-05T10:00:00Z');
+    expect(() => addExdateToEvent(raw, instanceDate)).toThrow('No VEVENT component');
   });
 });

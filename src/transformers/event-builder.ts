@@ -357,6 +357,50 @@ export function removeAllAlarmsFromEvent(raw: string): string {
 }
 
 /**
+ * Add EXDATE property to exclude a single instance from recurring event
+ *
+ * Adds an EXDATE property to the master VEVENT to mark a specific occurrence
+ * as deleted. EXDATE format must match master DTSTART value type and timezone.
+ *
+ * @param raw - Existing iCalendar string containing recurring master VEVENT
+ * @param instanceDate - The specific instance date to exclude
+ * @returns Updated iCalendar string with EXDATE added
+ */
+export function addExdateToEvent(raw: string, instanceDate: Date): string {
+  // Parse existing iCalendar
+  const jCalData = ICAL.parse(raw);
+  const comp = new ICAL.Component(jCalData);
+
+  // Get master VEVENT component
+  const vevent = comp.getFirstSubcomponent('vevent');
+  if (!vevent) {
+    throw new Error('No VEVENT component found in iCalendar data');
+  }
+
+  // Get master DTSTART to match EXDATE format
+  const dtstartProp = vevent.getFirstProperty('dtstart');
+  const masterDtstart = dtstartProp?.getFirstValue() as ICAL.Time;
+
+  // Create EXDATE value matching DTSTART format
+  const exdateTime = matchRecurrenceIdFormat(masterDtstart, instanceDate);
+
+  // Add EXDATE property
+  const exdateProp = new ICAL.Property('exdate');
+  exdateProp.setValue(exdateTime);
+
+  // Copy TZID parameter if present on DTSTART
+  const tzid = dtstartProp?.getParameter('tzid');
+  if (tzid) {
+    exdateProp.setParameter('tzid', tzid);
+  }
+
+  vevent.addProperty(exdateProp);
+
+  // Return serialized iCalendar
+  return comp.toString();
+}
+
+/**
  * Match RECURRENCE-ID format to master DTSTART format
  *
  * Creates an ICAL.Time for RECURRENCE-ID that matches the master event's DTSTART:
