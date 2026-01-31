@@ -119,7 +119,7 @@ export function formatStartupError(error: Error, url?: string): string {
  * indicating that the resource was modified by another client since it was last read.
  */
 export class ConflictError extends Error {
-  constructor(resourceType: 'event' | 'contact', detail?: string) {
+  constructor(resourceType: 'event' | 'contact' | 'invitation', detail?: string) {
     const message = [
       `The ${resourceType} was modified by another client since you last read it.`,
       '',

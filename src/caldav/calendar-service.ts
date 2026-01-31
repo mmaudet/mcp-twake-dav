@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto';
 import { ConflictError } from '../errors.js';
 import { transformCalendarObject } from '../transformers/event.js';
 import { transformInvitation, type InboxResponse } from '../transformers/invitation.js';
+import { updateAttendeePartstat } from '../transformers/event-builder.js';
 import type { EventDTO, InvitationDTO } from '../types/dtos.js';
 
 /**
@@ -615,5 +616,60 @@ export class CalendarService {
       this.logger.error({ err, inboxUrl }, 'Failed to query scheduling inbox');
       return [];
     }
+  }
+
+  /**
+   * Respond to a calendar invitation by updating PARTSTAT
+   *
+   * Uses RFC 6638 implicit scheduling: PUT the updated iCalendar to the
+   * invitation URL and the server automatically sends iTIP REPLY to organizer.
+   *
+   * @param invitationUrl - URL of the invitation in scheduling inbox (from InvitationDTO.url)
+   * @param etag - Current ETag for optimistic concurrency (from InvitationDTO.etag)
+   * @param attendeeEmail - Email of the attendee (current user)
+   * @param response - Participation response (ACCEPTED, DECLINED, TENTATIVE)
+   * @param rawIcal - Raw iCalendar string (from InvitationDTO._raw)
+   * @throws ConflictError if invitation was modified (412)
+   * @throws Error on other failures
+   */
+  async respondToInvitation(
+    invitationUrl: string,
+    etag: string,
+    attendeeEmail: string,
+    response: 'ACCEPTED' | 'DECLINED' | 'TENTATIVE',
+    rawIcal: string
+  ): Promise<void> {
+    this.logger.debug(
+      { url: invitationUrl, response, attendeeEmail },
+      'Responding to invitation'
+    );
+
+    // Update PARTSTAT in iCalendar using helper function
+    const updatedIcal = updateAttendeePartstat(rawIcal, attendeeEmail, response);
+
+    // PUT to inbox URL with ETag for optimistic concurrency
+    const httpResponse = await withRetry(
+      () => this.client.updateCalendarObject({
+        calendarObject: {
+          url: invitationUrl,
+          data: updatedIcal,
+          etag,
+        },
+      }),
+      this.logger
+    );
+
+    // Check response status
+    if (!httpResponse.ok) {
+      if (httpResponse.status === 412) {
+        throw new ConflictError('invitation');
+      }
+      throw new Error(`Failed to respond to invitation: HTTP ${httpResponse.status}`);
+    }
+
+    this.logger.info(
+      { url: invitationUrl, response },
+      'Successfully responded to invitation'
+    );
   }
 }
