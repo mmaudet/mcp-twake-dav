@@ -13,7 +13,7 @@ import type { DAVClientType } from './client.js';
 import type { Config } from '../config/schema.js';
 import { CollectionCache } from './cache.js';
 import { withRetry } from './retry.js';
-import { discoverCalendars } from './discovery.js';
+import { discoverCalendars, discoverSchedulingInbox } from './discovery.js';
 import { randomUUID } from 'node:crypto';
 import { ConflictError } from '../errors.js';
 import { transformCalendarObject } from '../transformers/event.js';
@@ -51,6 +51,7 @@ export class CalendarService {
   private readonly config: Config;
   private readonly objectCache: CollectionCache<DAVCalendarObject>;
   private calendars: DAVCalendar[] = [];
+  private schedulingInboxUrl: string | null | undefined = undefined;
 
   /**
    * Create a new CalendarService
@@ -464,5 +465,45 @@ export class CalendarService {
 
     this.logger.debug({ uid }, 'Event not found by UID');
     return null;
+  }
+
+  /**
+   * Get the scheduling inbox URL for the authenticated user
+   *
+   * Discovers the inbox URL via PROPFIND on principal and caches it for the session.
+   * Returns null if the server doesn't support RFC 6638 scheduling extensions.
+   *
+   * @returns Scheduling inbox URL or null if not supported
+   * @throws Error if principal URL is not available
+   */
+  async getSchedulingInboxUrl(): Promise<string | null> {
+    // Return cached value if already discovered
+    if (this.schedulingInboxUrl !== undefined) {
+      this.logger.debug({ cached: true }, 'Returning cached scheduling inbox URL');
+      return this.schedulingInboxUrl;
+    }
+
+    // Get principal URL from client account
+    // tsdav stores this in client.account?.principalUrl after createAccount/login
+    const principalUrl = (this.client as any).account?.principalUrl;
+    if (!principalUrl) {
+      this.logger.warn('Principal URL not available - cannot discover scheduling inbox');
+      this.schedulingInboxUrl = null;
+      return null;
+    }
+
+    // Discover inbox URL with retry
+    this.schedulingInboxUrl = await withRetry(
+      () => discoverSchedulingInbox(this.client, principalUrl, this.logger),
+      this.logger
+    );
+
+    if (this.schedulingInboxUrl) {
+      this.logger.info({ inboxUrl: this.schedulingInboxUrl }, 'Discovered scheduling inbox');
+    } else {
+      this.logger.info('Scheduling inbox not available (server may not support RFC 6638)');
+    }
+
+    return this.schedulingInboxUrl;
   }
 }
