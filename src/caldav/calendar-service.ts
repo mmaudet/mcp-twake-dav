@@ -17,7 +17,8 @@ import { discoverCalendars, discoverSchedulingInbox } from './discovery.js';
 import { randomUUID } from 'node:crypto';
 import { ConflictError } from '../errors.js';
 import { transformCalendarObject } from '../transformers/event.js';
-import type { EventDTO } from '../types/dtos.js';
+import { transformInvitation, type InboxResponse } from '../transformers/invitation.js';
+import type { EventDTO, InvitationDTO } from '../types/dtos.js';
 
 /**
  * ISO 8601 time range for server-side calendar filtering
@@ -505,5 +506,114 @@ export class CalendarService {
     }
 
     return this.schedulingInboxUrl;
+  }
+
+  /**
+   * List pending invitations from the scheduling inbox
+   *
+   * Queries the scheduling inbox for events where the current user
+   * is an attendee with PARTSTAT=NEEDS-ACTION (awaiting response).
+   *
+   * @param timeRange - Optional time range filter for proposed event times
+   * @returns Array of pending InvitationDTO objects, empty if none or inbox not supported
+   */
+  async listPendingInvitations(timeRange?: TimeRange): Promise<InvitationDTO[]> {
+    // Get inbox URL (may return null if not supported)
+    const inboxUrl = await this.getSchedulingInboxUrl();
+    if (!inboxUrl) {
+      this.logger.info('No scheduling inbox available, returning empty invitations list');
+      return [];
+    }
+
+    // Get user email from config (used for ATTENDEE matching)
+    // Use DAV_USERNAME as email (required for basic auth, may be undefined for other auth methods)
+    const userEmail = this.config.DAV_USERNAME || '';
+
+    this.logger.debug({ inboxUrl, userEmail }, 'Querying scheduling inbox for pending invitations');
+
+    // Build calendar-query REPORT with PARTSTAT=NEEDS-ACTION filter
+    // See RFC 4791 Section 7.8.7 for param-filter syntax
+    const queryProps = {
+      'calendar-query': {
+        _attributes: {
+          'xmlns:c': 'urn:ietf:params:xml:ns:caldav',
+          'xmlns:d': 'DAV:',
+        },
+        prop: {
+          'd:getetag': {},
+          'c:calendar-data': {},
+        },
+        filter: {
+          'comp-filter': {
+            _attributes: { name: 'VCALENDAR' },
+            'comp-filter': {
+              _attributes: { name: 'VEVENT' },
+              'prop-filter': {
+                _attributes: { name: 'ATTENDEE' },
+                'text-match': {
+                  _attributes: { collation: 'i;ascii-casemap' },
+                  _text: `mailto:${userEmail}`,
+                },
+                'param-filter': {
+                  _attributes: { name: 'PARTSTAT' },
+                  'text-match': {
+                    _attributes: { collation: 'i;ascii-casemap' },
+                    _text: 'NEEDS-ACTION',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    try {
+      // Execute calendar-query REPORT with retry
+      const responses = await withRetry(
+        () => this.client.calendarQuery({
+          url: inboxUrl,
+          props: queryProps,
+          depth: '1',
+        }),
+        this.logger
+      );
+
+      this.logger.debug({ count: responses.length }, 'Received inbox query responses');
+
+      // Transform responses to InvitationDTOs
+      const invitations: InvitationDTO[] = [];
+      for (const resp of responses) {
+        // Cast response to InboxResponse type
+        const inboxResp: InboxResponse = {
+          href: resp.href || '',
+          props: {
+            getetag: resp.props?.getetag as string | undefined,
+            calendarData: resp.props?.calendarData as string | undefined,
+          },
+        };
+
+        const invitation = transformInvitation(inboxResp, userEmail, this.logger);
+        if (invitation) {
+          // Apply time range filter if provided (client-side since not all servers support it)
+          if (timeRange) {
+            const start = new Date(timeRange.start);
+            const end = new Date(timeRange.end);
+            if (invitation.proposedStart >= start && invitation.proposedEnd <= end) {
+              invitations.push(invitation);
+            }
+          } else {
+            invitations.push(invitation);
+          }
+        }
+      }
+
+      this.logger.info({ count: invitations.length }, 'Found pending invitations');
+      return invitations;
+    } catch (err) {
+      // Log error but don't crash - return empty list for graceful degradation
+      this.logger.error({ err, inboxUrl }, 'Failed to query scheduling inbox');
+      return [];
+    }
   }
 }
