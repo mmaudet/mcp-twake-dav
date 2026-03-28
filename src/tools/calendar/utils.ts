@@ -254,6 +254,12 @@ export function getEventsWithRecurrenceExpansion(
       continue;
     }
 
+    // Skip cancelled events (both recurring and non-recurring)
+    if (eventDTO.status === 'CANCELLED') {
+      logger.debug({ uid: eventDTO.uid, summary: eventDTO.summary }, 'Skipping cancelled event');
+      continue;
+    }
+
     // Handle recurring events
     if (eventDTO.isRecurring) {
       try {
@@ -451,6 +457,12 @@ export function computeBusyPeriods(events: EventDTO[], logger: Logger): FreeBusy
       const vevent = comp.getFirstSubcomponent('vevent');
 
       if (!vevent) {
+        continue;
+      }
+
+      // Skip cancelled events — they don't block time
+      if (event.status === 'CANCELLED') {
+        logger.debug({ uid: event.uid }, 'Skipping CANCELLED event for busy period');
         continue;
       }
 
