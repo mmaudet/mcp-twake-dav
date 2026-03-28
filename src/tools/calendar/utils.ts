@@ -390,7 +390,13 @@ export async function resolveCalendarEvents(
   defaultCalendar: string | undefined,
   timeRange: TimeRange,
 ): Promise<DAVCalendarObject[]> {
-  const target = calendarParam === 'all' ? undefined : (calendarParam || defaultCalendar);
+  // When a default calendar is configured, use it unless the user explicitly
+  // provides a different calendar name.  The LLM often sends "all" by default
+  // which would bypass the user's configured filter — ignore "all" when a
+  // default is set so only the user's own calendar is queried.
+  const target = calendarParam === 'all'
+    ? (defaultCalendar || undefined)
+    : (calendarParam || defaultCalendar);
   if (target) {
     return calendarService.fetchEventsByCalendarName(target, timeRange);
   }
